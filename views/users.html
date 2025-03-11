@@ -1,100 +1,125 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Users List (Protected)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Tailwind CSS CDN -->
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Dashboard | Conference Review System</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
+<body class="bg-gradient-to-r from-purple-800 via-indigo-900 to-gray-900 min-h-screen text-white">
 
-  <!-- Header -->
-  <header class="bg-blue-700 text-white p-4 shadow flex justify-between items-center">
-    <h1 class="text-2xl font-semibold">User Dashboard</h1>
-    <button 
-      onclick="logout()" 
-      class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded transition duration-300">
-      Logout
-    </button>
-  </header>
+  <div class="max-w-4xl mx-auto p-8">
+    <h1 class="text-3xl font-bold mb-6">Welcome to Your Dashboard</h1>
+    <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 py-2 px-4 rounded mb-6">Logout</button>
 
-  <!-- Main Content -->
-  <main class="flex-grow container mx-auto p-6">
-    <div class="bg-white shadow-lg rounded-lg p-8">
-      <h2 class="text-xl font-bold mb-4 text-gray-800">Registered Users</h2>
-      <p id="message" class="mb-4 text-red-600"></p>
-
-      <!-- User List -->
-      <ul id="userList" class="space-y-2">
-        <!-- Users will be appended here -->
-      </ul>
+    <!-- Paper Upload Form -->
+    <div class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md mb-8">
+      <h2 class="text-xl font-semibold mb-4">Submit a New Paper</h2>
+      <form id="paperForm" class="space-y-4">
+        <input type="text" id="title" placeholder="Paper Title" class="w-full px-4 py-2 rounded bg-white text-black" required />
+        <textarea id="abstract" placeholder="Abstract" class="w-full px-4 py-2 rounded bg-white text-black" required></textarea>
+        <input type="file" id="paperFile" accept=".pdf" required class="w-full px-4 py-2 bg-white rounded text-black" />
+        <button type="submit" class="w-full bg-green-500 hover:bg-green-600 py-2 rounded">Submit Paper</button>
+      </form>
+      <p id="uploadMessage" class="text-sm text-red-400 mt-2"></p>
     </div>
-  </main>
 
-  <!-- Footer -->
-  <footer class="bg-gray-200 text-center text-gray-600 py-4">
-    &copy; 2025 Conference Review System
-  </footer>
+    <!-- List of Submitted Papers -->
+    <div class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md">
+      <h2 class="text-xl font-semibold mb-4">Your Submitted Papers</h2>
+      <ul id="papersList" class="space-y-4"></ul>
+    </div>
+  </div>
 
-  <!-- JS Script -->
   <script>
-    const userList = document.getElementById('userList');
-    const message = document.getElementById('message');
+    // ✅ Fixed the token key
+    const userToken = localStorage.getItem('token'); 
+    const paperForm = document.getElementById('paperForm');
+    const papersList = document.getElementById('papersList');
+    const uploadMessage = document.getElementById('uploadMessage');
 
-    // Logout function
-    function logout() {
-      localStorage.removeItem('token');
+    if (!userToken) {
+      alert('You are not logged in! Redirecting to login page...');
       window.location.href = 'index.html';
     }
 
-    // Fetch Users
-    async function fetchUsers() {
-      const token = localStorage.getItem('token');
+    // Fetch existing papers on load
+    window.addEventListener('DOMContentLoaded', fetchPapers);
 
-      if (!token) {
-        message.textContent = 'You must be logged in!';
-        setTimeout(() => {
-          window.location.href = 'index.html';
-        }, 1500);
-        return;
-      }
-
+    async function fetchPapers() {
       try {
-        const response = await fetch('http://localhost:3000/users', {
-          headers: { 'Authorization': 'Bearer ' + token }
+        const res = await fetch('http://localhost:3000/my-papers', {
+          headers: { 'Authorization': `Bearer ${userToken}` }
         });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          message.textContent = data.error || 'Failed to fetch users.';
+        if (!res.ok) {
+          console.error('Error fetching papers:', res.statusText);
           return;
         }
 
-        if (data.length === 0) {
-          userList.innerHTML = '<li class="text-gray-500">No users found.</li>';
-          return;
-        }
+        const papers = await res.json();
 
-        data.forEach(user => {
-          const li = document.createElement('li');
-          li.className = "bg-gray-50 p-4 rounded shadow hover:bg-gray-100 transition";
-          li.innerHTML = `
-            <p><strong>ID:</strong> ${user.id}</p>
-            <p><strong>Name:</strong> ${user.name}</p>
-            <p><strong>Email:</strong> ${user.email}</p>
+        papersList.innerHTML = '';
+        papers.forEach(paper => {
+          papersList.innerHTML += `
+            <li class="bg-white bg-opacity-10 p-4 rounded">
+              <h3 class="text-lg font-bold">${paper.title}</h3>
+              <p>${paper.abstract}</p>
+              <a href="http://localhost:3000/uploads/${paper.filename}" target="_blank" class="text-blue-300 underline mt-2 inline-block">Download PDF</a>
+            </li>
           `;
-          userList.appendChild(li);
         });
-      } catch (error) {
-        message.textContent = 'Something went wrong!';
-        console.error(error);
+      } catch (err) {
+        console.error('Fetch papers error:', err);
       }
     }
 
-    // Run on page load
-    fetchUsers();
+    paperForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const title = document.getElementById('title').value;
+      const abstract = document.getElementById('abstract').value;
+      const paperFile = document.getElementById('paperFile').files[0];
+
+      if (!paperFile) {
+        uploadMessage.textContent = 'Please select a PDF file';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('description', abstract);
+      formData.append('paper', paperFile);
+
+      try {
+        const res = await fetch('http://localhost:3000/upload-paper', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${userToken}` // ✅ Ensure it's "Bearer <token>"
+          },
+          body: formData
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          uploadMessage.textContent = '✅ Paper uploaded successfully!';
+          paperForm.reset();
+          fetchPapers(); // Refresh the paper list
+        } else {
+          uploadMessage.textContent = data.error || 'Upload failed!';
+        }
+      } catch (err) {
+        console.error('Upload error:', err);
+        uploadMessage.textContent = 'An error occurred during upload.';
+      }
+    });
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+  localStorage.removeItem('token');
+  window.location.href = 'index.html';
+});
+
   </script>
+
 </body>
 </html>

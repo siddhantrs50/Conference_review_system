@@ -2,46 +2,127 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Reviewer Dashboard</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reviewer Dashboard | Conference Review System</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
-  
-  <!-- Header -->
-  <header class="bg-purple-700 text-white p-4 shadow flex justify-between items-center">
-    <h1 class="text-2xl font-semibold">Reviewer Dashboard</h1>
-    <button 
-      onclick="logout()" 
-      class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded transition duration-300">
-      Logout
-    </button>
-  </header>
+<body class="bg-gradient-to-r from-green-800 via-blue-900 to-gray-900 min-h-screen text-white">
 
-  <!-- Main Content -->
-  <main class="flex-grow container mx-auto p-6">
-    <div class="bg-white shadow-lg rounded-lg p-8">
-      <h2 class="text-xl font-bold mb-4 text-gray-800">Welcome Reviewer!</h2>
-      <p class="mb-6 text-gray-600">You are successfully logged in. Use the actions below to manage your reviews.</p>
+  <div class="max-w-5xl mx-auto p-8">
+    <h1 class="text-3xl font-bold mb-6">Reviewer Dashboard</h1>
+    <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 py-2 px-4 rounded mb-6">Logout</button>
 
-      <div class="space-y-4">
-        <a href="#" class="block w-full bg-indigo-500 hover:bg-indigo-600 text-white text-center px-4 py-2 rounded transition duration-300">View Assigned Papers</a>
-        <a href="#" class="block w-full bg-green-500 hover:bg-green-600 text-white text-center px-4 py-2 rounded transition duration-300">Submit New Review</a>
-      </div>
+    <!-- Assigned Papers for Review -->
+    <div class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md">
+      <h2 class="text-xl font-semibold mb-4">Assigned Papers</h2>
+      <ul id="assignedPapers" class="space-y-4"></ul>
     </div>
-  </main>
+  </div>
 
-  <!-- Footer -->
-  <footer class="bg-gray-200 text-center text-gray-600 py-4">
-    &copy; 2025 Conference Review System
-  </footer>
-
-  <!-- Logout Script -->
   <script>
-    function logout() {
-      localStorage.removeItem('reviewerToken');
-      window.location.href = '/reviewer-login';
+    const reviewerToken = localStorage.getItem('reviewerToken'); // Assuming reviewer token is saved
+    const assignedPapers = document.getElementById('assignedPapers');
+
+    window.addEventListener('DOMContentLoaded', fetchAssignedPapers);
+
+    async function fetchAssignedPapers() {
+      try {
+        const res = await fetch('http://localhost:3000/review-papers', {
+          headers: { 'Authorization': `Bearer ${reviewerToken}` }
+        });
+
+        const papers = await res.json();
+
+        assignedPapers.innerHTML = '';
+
+        papers.forEach(paper => {
+          assignedPapers.innerHTML += `
+            <li class="bg-white bg-opacity-10 p-4 rounded">
+              <h3 class="text-lg font-bold">${paper.title}</h3>
+              <p>${paper.abstract}</p>
+              <a href="http://localhost:3000/uploads/${paper.filename}" target="_blank" class="text-blue-300 underline block mb-4">Download Paper</a>
+
+              <form onsubmit="submitReview(event, ${paper.id})" class="space-y-2">
+                <textarea id="review-${paper.id}" class="w-full px-4 py-2 rounded bg-white text-black" placeholder="Write your review" required></textarea>
+                
+                <!-- Score Selector -->
+                <select id="score-${paper.id}" class="w-full px-4 py-2 rounded bg-white text-black" required>
+                  <option value="">Select a score</option>
+                  <option value="1">1 - Poor</option>
+                  <option value="2">2 - Fair</option>
+                  <option value="3">3 - Good</option>
+                  <option value="4">4 - Very Good</option>
+                  <option value="5">5 - Excellent</option>
+                </select>
+
+                <!-- Status Selector -->
+                <select id="status-${paper.id}" class="w-full px-4 py-2 rounded bg-white text-black" required>
+                  <option value="">Select a status</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Accepted">Accepted</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
+
+                <button type="submit" class="w-full bg-purple-500 hover:bg-purple-600 py-2 rounded">Submit Review</button>
+              </form>
+            </li>
+          `;
+        });
+
+      } catch (err) {
+        console.error(err);
+      }
     }
+
+    async function submitReview(e, paperId) {
+      e.preventDefault();
+
+      const reviewText = document.getElementById(`review-${paperId}`).value.trim();
+      const score = document.getElementById(`score-${paperId}`).value;
+      const status = document.getElementById(`status-${paperId}`).value;
+
+      console.log('Submitting Review:', { paperId, reviewText, score, status });
+
+      if (!reviewText || !score || !status) {
+        alert('Please fill in all fields!');
+        return;
+      }
+
+      try {
+        const res = await fetch('http://localhost:3000/submit-review', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${reviewerToken}`
+          },
+          body: JSON.stringify({
+            paperId: paperId,
+            reviewText: reviewText,
+            score: parseInt(score), // ensure it's a number
+            status: status
+          })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          alert('Review submitted successfully!');
+          fetchAssignedPapers(); // Refresh
+        } else {
+          alert(data.error || 'Error submitting review');
+        }
+
+      } catch (err) {
+        console.error(err);
+        alert('Failed to submit review.');
+      }
+    }
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('reviewerToken');
+      window.location.href = 'reviewer-login.html';
+    });
   </script>
+
 </body>
 </html>
