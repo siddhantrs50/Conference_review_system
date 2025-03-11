@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Users List (Protected)</title>
+</head>
+<body>
+  <h1>Users</h1>
+  <ul id="userList"></ul>
+  <p id="message"></p>
+
+  <button onclick="logout()">Logout</button>
+
+  <script>
+    const userList = document.getElementById('userList');
+    const message = document.getElementById('message');
+
+    // Function to logout
+    function logout() {
+      localStorage.removeItem('token');
+      window.location.href = 'index.html';
+    }
+
+    // Fetch users from backend (protected route)
+    async function fetchUsers() {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        message.textContent = 'You must be logged in!';
+        window.location.href = 'index.html';
+        return;
+      }
+
+      try {
+        const response = await fetch('http://localhost:3000/users', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          message.textContent = data.error || 'Failed to fetch users';
+          return;
+        }
+
+        data.forEach(user => {
+          const li = document.createElement('li');
+          li.textContent = `ID: ${user.id}, Name: ${user.name}, Email: ${user.email}`;
+          userList.appendChild(li);
+        });
+      } catch (error) {
+        message.textContent = 'Something went wrong!';
+        console.error(error);
+      }
+    }
+
+    fetchUsers();
+  </script>
+</body>
+</html>
