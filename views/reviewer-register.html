@@ -5,35 +5,84 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Reviewer Register | Conference Review System</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+
+  <style>
+    body {
+      background-image: url('images/login_page.jpg'); /* Change this to your actual background image */
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+
+    /* Dark overlay for better readability */
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.5); /* Dark overlay */
+      z-index: -1;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
-  <div class="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
-    <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Reviewer Register</h2>
 
-    <form id="reviewerRegisterForm" class="space-y-4">
-      <div>
-        <label class="block text-gray-700">Name</label>
-        <input type="text" id="name" required class="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-purple-400 focus:outline-none" />
+<body class="min-h-screen flex items-center justify-center text-white">
+
+  <div class="flex flex-col md:flex-row items-center justify-center gap-12 px-4 md:px-12 w-full">
+
+   
+
+    <!-- Right Registration Form Box (Glassmorphism) -->
+    <div class="bg-white bg-opacity-10 backdrop-blur-md border border-white border-opacity-30 rounded-lg shadow-lg p-8 w-full max-w-md">
+
+      <h2 class="text-2xl font-bold mb-6 text-center text-white">Create Reviewer Account</h2>
+
+      <form id="reviewerRegisterForm" class="space-y-4">
+
+        <!-- Name Field -->
+        <div>
+          <label class="block text-sm text-white mb-1">Name</label>
+          <input type="text" id="name" required
+            class="w-full px-4 py-2 border border-white bg-white bg-opacity-20 rounded-md text-white placeholder-white focus:ring-2 focus:ring-purple-400 focus:outline-none"
+            placeholder="Enter your name" />
+        </div>
+
+        <!-- Email Field -->
+        <div>
+          <label class="block text-sm text-white mb-1">Email</label>
+          <input type="email" id="email" required
+            class="w-full px-4 py-2 border border-white bg-white bg-opacity-20 rounded-md text-white placeholder-white focus:ring-2 focus:ring-purple-400 focus:outline-none"
+            placeholder="Enter your email" />
+        </div>
+
+        <!-- Password Field -->
+        <div>
+          <label class="block text-sm text-white mb-1">Password</label>
+          <input type="password" id="password" required
+            class="w-full px-4 py-2 border border-white bg-white bg-opacity-20 rounded-md text-white placeholder-white focus:ring-2 focus:ring-purple-400 focus:outline-none"
+            placeholder="Enter your password" />
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit"
+          class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-md transition duration-300">
+          Register
+        </button>
+
+        <!-- Message -->
+        <p id="message" class="text-center text-sm text-red-400 mt-2"></p>
+      </form>
+
+      <!-- Navigation Links -->
+      <div class="mt-6 text-center text-sm">
+        <p>Already have a reviewer account? <a href="reviewer-login.html" class="text-purple-300 hover:underline">Login here</a></p>
+        <p class="mt-2">Back to <a href="index.html" class="text-blue-300 hover:underline">User Login</a></p>
       </div>
-      <div>
-        <label class="block text-gray-700">Email</label>
-        <input type="email" id="email" required class="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-purple-400 focus:outline-none" />
-      </div>
-      <div>
-        <label class="block text-gray-700">Password</label>
-        <input type="password" id="password" required class="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-purple-400 focus:outline-none" />
-      </div>
 
-      <button type="submit" class="w-full bg-green-500 text-white py-2 rounded-md hover:bg-green-600 transition duration-300">Register</button>
-
-      <p id="message" class="text-center text-sm text-red-500"></p>
-    </form>
-
-    <div class="mt-6 text-center">
-      <p class="text-sm">Already have a reviewer account? <a href="reviewer-login.html" class="text-purple-500 hover:underline">Login here</a></p>
     </div>
+
   </div>
 
+  <!-- Script to handle form submission -->
   <script>
     const form = document.getElementById('reviewerRegisterForm');
     const message = document.getElementById('message');
@@ -58,7 +107,7 @@
           message.textContent = 'Registration successful!';
           setTimeout(() => window.location.href = 'reviewer-login.html', 1500);
         } else {
-          message.textContent = data.error;
+          message.textContent = data.error || 'Registration failed.';
         }
       } catch (error) {
         message.textContent = 'Something went wrong!';
