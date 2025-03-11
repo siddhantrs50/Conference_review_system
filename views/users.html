@@ -1,39 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>User Dashboard | Conference Review System</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
 </head>
-<body class="bg-gradient-to-r from-purple-800 via-indigo-900 to-gray-900 min-h-screen text-white">
 
-  <div class="max-w-4xl mx-auto p-8">
-    <h1 class="text-3xl font-bold mb-6">Welcome to Your Dashboard</h1>
-    <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 py-2 px-4 rounded mb-6">Logout</button>
+<body class="bg-gradient-to-r from-purple-800 via-indigo-900 to-gray-900 min-h-screen text-white flex">
 
-    <!-- Paper Upload Form -->
-    <div class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md mb-8">
-      <h2 class="text-xl font-semibold mb-4">Submit a New Paper</h2>
-      <form id="paperForm" class="space-y-4">
-        <input type="text" id="title" placeholder="Paper Title" class="w-full px-4 py-2 rounded bg-white text-black" required />
-        <textarea id="abstract" placeholder="Abstract" class="w-full px-4 py-2 rounded bg-white text-black" required></textarea>
-        <input type="file" id="paperFile" accept=".pdf" required class="w-full px-4 py-2 bg-white rounded text-black" />
-        <button type="submit" class="w-full bg-green-500 hover:bg-green-600 py-2 rounded">Submit Paper</button>
-      </form>
-      <p id="uploadMessage" class="text-sm text-red-400 mt-2"></p>
+  <!-- Sidebar -->
+  <aside class="w-64 bg-gray-800 text-gray-200 flex flex-col p-6 space-y-10">
+    <div class="text-2xl font-bold text-white mb-10">Dashboard</div>
+    <nav class="flex flex-col space-y-4">
+      <button onclick="showSection('myPapers')" class="text-left hover:bg-gray-700 p-3 rounded transition">My Papers</button>
+      <button onclick="showSection('addPaper')" class="text-left hover:bg-gray-700 p-3 rounded transition">Add New Paper</button>
+      <button onclick="showSection('myProfile')" class="text-left hover:bg-gray-700 p-3 rounded transition">My Profile</button>
+    </nav>
+
+    <!-- Logout Button -->
+    <div class="mt-auto">
+      <button id="logoutBtn" class="w-full bg-red-500 hover:bg-red-600 py-2 px-4 rounded">Logout</button>
     </div>
+  </aside>
 
-    <!-- List of Submitted Papers -->
-    <div class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md">
-      <h2 class="text-xl font-semibold mb-4">Your Submitted Papers</h2>
-      <ul id="papersList" class="space-y-4"></ul>
-    </div>
-  </div>
+  <!-- Main Content -->
+  <main class="flex-1 p-10 space-y-8">
+
+    <!-- My Papers Section -->
+    <section id="myPapersSection">
+      <h1 class="text-3xl font-bold mb-6">Your Submitted Papers</h1>
+      <div class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md">
+        <ul id="papersList" class="space-y-4">
+          <!-- Papers will load here -->
+        </ul>
+      </div>
+    </section>
+
+    <!-- Add New Paper Section -->
+    <section id="addPaperSection" class="hidden">
+      <h1 class="text-3xl font-bold mb-6">Submit a New Paper</h1>
+      <div class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md">
+        <form id="paperForm" class="space-y-4">
+          <input type="text" id="title" placeholder="Paper Title" class="w-full px-4 py-2 rounded bg-white text-black" required />
+          <textarea id="abstract" placeholder="Abstract" class="w-full px-4 py-2 rounded bg-white text-black" required></textarea>
+          <input type="file" id="paperFile" accept=".pdf" required class="w-full px-4 py-2 bg-white rounded text-black" />
+          <button type="submit" class="w-full bg-green-500 hover:bg-green-600 py-2 rounded">Submit Paper</button>
+        </form>
+        <p id="uploadMessage" class="text-sm mt-2"></p>
+      </div>
+    </section>
+
+    <!-- My Profile Section -->
+    <section id="myProfileSection" class="hidden">
+      <h1 class="text-3xl font-bold mb-6">My Profile</h1>
+      <div class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md space-y-4">
+        <p><strong>Name:</strong> <span id="profileName" class="text-yellow-300">Loading...</span></p>
+        <p><strong>Email:</strong> <span id="profileEmail" class="text-yellow-300">Loading...</span></p>
+        <p><strong>Role:</strong> <span id="profileRole" class="text-yellow-300">Loading...</span></p>
+        <!-- Add more fields if needed -->
+      </div>
+    </section>
+
+  </main>
 
   <script>
-    // ✅ Fixed the token key
-    const userToken = localStorage.getItem('token'); 
+    const userToken = localStorage.getItem('token');
     const paperForm = document.getElementById('paperForm');
     const papersList = document.getElementById('papersList');
     const uploadMessage = document.getElementById('uploadMessage');
@@ -43,9 +76,30 @@
       window.location.href = 'index.html';
     }
 
-    // Fetch existing papers on load
-    window.addEventListener('DOMContentLoaded', fetchPapers);
+    // Section Toggle Functionality
+    function showSection(section) {
+      document.getElementById('myPapersSection').classList.add('hidden');
+      document.getElementById('addPaperSection').classList.add('hidden');
+      document.getElementById('myProfileSection').classList.add('hidden');
 
+      if (section === 'myPapers') {
+        document.getElementById('myPapersSection').classList.remove('hidden');
+      } else if (section === 'addPaper') {
+        document.getElementById('addPaperSection').classList.remove('hidden');
+      } else if (section === 'myProfile') {
+        document.getElementById('myProfileSection').classList.remove('hidden');
+        fetchUserProfile();  // 👈 fetch profile info when "My Profile" is clicked
+      }
+    }
+
+    // Fetch Papers on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchPapers();
+      showSection('myPapers'); // Show My Papers by default
+      fetchUserProfile();      // 👈 Also fetch profile data on page load
+    });
+
+    // Fetch Papers Function
     async function fetchPapers() {
       try {
         const res = await fetch('http://localhost:3000/my-papers', {
@@ -54,26 +108,59 @@
 
         if (!res.ok) {
           console.error('Error fetching papers:', res.statusText);
+          papersList.innerHTML = '<li>No papers found or an error occurred.</li>';
           return;
         }
 
         const papers = await res.json();
-
         papersList.innerHTML = '';
+
+        if (papers.length === 0) {
+          papersList.innerHTML = '<li class="text-gray-400">No papers submitted yet.</li>';
+          return;
+        }
+
         papers.forEach(paper => {
+          const fileName = paper.file_path.split('/').pop();
+
           papersList.innerHTML += `
             <li class="bg-white bg-opacity-10 p-4 rounded">
-              <h3 class="text-lg font-bold">${paper.title}</h3>
-              <p>${paper.abstract}</p>
-              <a href="http://localhost:3000/uploads/${paper.filename}" target="_blank" class="text-blue-300 underline mt-2 inline-block">Download PDF</a>
+              <h3 class="text-lg font-bold mb-2">${paper.title}</h3>
+              <p class="text-sm mb-2 text-yellow-400">Status: ${paper.status}</p>
+              <a href="http://localhost:3000/uploads/${fileName}" target="_blank" class="text-blue-300 underline mt-2 inline-block">Download Paper</a>
             </li>
           `;
         });
       } catch (err) {
         console.error('Fetch papers error:', err);
+        papersList.innerHTML = '<li class="text-red-400">Failed to load papers.</li>';
       }
     }
 
+    // Fetch User Profile Function
+    async function fetchUserProfile() {
+      try {
+        const res = await fetch('http://localhost:3000/profile', {
+          headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+
+        if (!res.ok) {
+          console.error('Error fetching profile:', res.statusText);
+          return;
+        }
+
+        const profile = await res.json();
+
+        document.getElementById('profileName').textContent = profile.username || 'N/A';
+        document.getElementById('profileEmail').textContent = profile.email || 'N/A';
+        document.getElementById('profileRole').textContent = profile.role || 'Author';  // Default role if not returned
+
+      } catch (err) {
+        console.error('Fetch profile error:', err);
+      }
+    }
+
+    // Handle Paper Submission
     paperForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
@@ -83,6 +170,7 @@
 
       if (!paperFile) {
         uploadMessage.textContent = 'Please select a PDF file';
+        uploadMessage.classList.add('text-red-400');
         return;
       }
 
@@ -95,7 +183,7 @@
         const res = await fetch('http://localhost:3000/upload-paper', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${userToken}` // ✅ Ensure it's "Bearer <token>"
+            'Authorization': `Bearer ${userToken}`
           },
           body: formData
         });
@@ -104,22 +192,31 @@
 
         if (res.ok) {
           uploadMessage.textContent = '✅ Paper uploaded successfully!';
+          uploadMessage.classList.remove('text-red-400');
+          uploadMessage.classList.add('text-green-400');
           paperForm.reset();
-          fetchPapers(); // Refresh the paper list
+          fetchPapers(); // Refresh papers list
+          showSection('myPapers'); // Switch back to My Papers section
         } else {
           uploadMessage.textContent = data.error || 'Upload failed!';
+          uploadMessage.classList.remove('text-green-400');
+          uploadMessage.classList.add('text-red-400');
         }
       } catch (err) {
         console.error('Upload error:', err);
         uploadMessage.textContent = 'An error occurred during upload.';
+        uploadMessage.classList.add('text-red-400');
       }
     });
+
+    // Logout function
     document.getElementById('logoutBtn').addEventListener('click', () => {
-  localStorage.removeItem('token');
-  window.location.href = 'index.html';
-});
+      localStorage.removeItem('token');
+      window.location.href = 'index.html';
+    });
 
   </script>
 
 </body>
+
 </html>

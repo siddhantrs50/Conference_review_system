@@ -15,8 +15,8 @@ const PORT = 3000;
 // ✅ Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('views')); // Serve static HTML
-app.use('/uploads', express.static('uploads')); // Serve uploaded files
+app.use(express.static('views')); // Serve static HTML files
+app.use('/uploads', express.static('uploads')); // Serve uploaded papers
 
 // ✅ Secret key for JWT
 const SECRET_KEY = 'supersecretkey';
@@ -53,9 +53,8 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// -------------------- ROUTES -------------------- //
+// ===================== PAGE ROUTES ===================== //
 
-// ✅ Serve Pages
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
@@ -114,48 +113,56 @@ app.post('/login', (req, res) => {
 
 // ✅ Upload Paper (Protected)
 app.post('/upload-paper', verifyToken, upload.single('paper'), (req, res) => {
-    console.log('REQ.USER:', req.user);
-    console.log('REQ.BODY:', req.body);
-    console.log('REQ.FILE:', req.file);
-  
-    const userId = req.user.id;
-    const { title, description, abstract } = req.body;
-    const paperDescription = description || abstract;
-    const filePath = req.file ? req.file.path : null;
-  
-    if (!filePath) {
-      console.error('No file uploaded');
-      return res.status(400).json({ error: 'No file uploaded!' });
+  const userId = req.user.id;
+  const { title, description, abstract } = req.body;
+  const paperDescription = description || abstract;
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded!' });
+  }
+
+  const filePath = req.file.path; // uploads/filename
+
+  const query = 'INSERT INTO papers (user_id, title, description, file_path, status) VALUES (?, ?, ?, ?, ?)';
+  db.query(query, [userId, title, paperDescription, filePath, 'Submitted'], (err) => {
+    if (err) {
+      console.error('DB Insert Error:', err);
+      return res.status(500).json({ error: 'Paper submission failed!' });
     }
-  
-    const query = 'INSERT INTO papers (user_id, title, description, file_path, status) VALUES (?, ?, ?, ?, ?)';
-    db.query(query, [userId, title, paperDescription, filePath, 'Submitted'], (err) => {
-      if (err) {
-        console.error('DB Insert Error:', err); // ✅ This will show the real problem
-        return res.status(500).json({ error: 'Paper submission failed!' });
-      }
-      res.json({ message: 'Paper submitted successfully!' });
-    });
+    res.json({ message: 'Paper submitted successfully!' });
   });
+});
 
 // ✅ Get User Papers (Protected)
 app.get('/my-papers', verifyToken, (req, res) => {
-    const userId = req.user.id;
-  
-    console.log('Fetching papers for user:', req.user); // ✅ This is safe
-  
-    const query = 'SELECT * FROM papers WHERE user_id = ?';
-  
-    db.query(query, [userId], (err, results) => {
-      if (err) {
-        console.error('Database error:', err);
-        return res.status(500).json({ error: 'Failed to fetch papers!' });
-      }
-  
-      res.json(results);
-    });
+  const userId = req.user.id;
+
+  const query = 'SELECT * FROM papers WHERE user_id = ?';
+  db.query(query, [userId], (err, results) => {
+    if (err) {
+      console.error('Database error:', err);
+      return res.status(500).json({ error: 'Failed to fetch papers!' });
+    }
+
+    res.json(results);
   });
-  
+});
+
+// ✅ Download Uploaded Paper by Filename (Optional Helper Route)
+app.get('/uploads/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filepath = path.join(__dirname, 'uploads', filename);
+
+  fs.access(filepath, fs.constants.F_OK, (err) => {
+    if (err) {
+      console.error('File not found:', filepath);
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    res.sendFile(filepath);
+  });
+});
+
 // ===================== REVIEWER ROUTES ===================== //
 
 // ✅ Reviewer Registration
@@ -204,50 +211,72 @@ app.get('/review-papers', verifyToken, (req, res) => {
 
 // ✅ Submit Review (Protected)
 app.post('/submit-review', verifyToken, (req, res) => {
-    const reviewerId = req.user.id;
-    const { paperId, reviewText, score, status } = req.body;
-  
-    console.log('Incoming Review:', { paperId, reviewText, score, status });
-  
-    // Validate inputs
-    if (
-      typeof paperId === 'undefined' ||
-      typeof reviewText !== 'string' || reviewText.trim() === '' ||
-      typeof score === 'undefined' ||
-      typeof status !== 'string' || status.trim() === ''
-    ) {
-      console.log('Validation failed due to missing fields.');
-      return res.status(400).json({ error: 'All fields are required!' });
+  const reviewerId = req.user.id;
+  const { paperId, reviewText, score, status } = req.body;
+
+  if (
+    typeof paperId === 'undefined' ||
+    typeof reviewText !== 'string' || reviewText.trim() === '' ||
+    typeof score === 'undefined' ||
+    typeof status !== 'string' || status.trim() === ''
+  ) {
+    return res.status(400).json({ error: 'All fields are required!' });
+  }
+
+  const reviewQuery = `
+    INSERT INTO reviews (reviewer_id, paper_id, comments, score, status)
+    VALUES (?, ?, ?, ?, ?)
+  `;
+
+  db.query(reviewQuery, [reviewerId, paperId, reviewText.trim(), score, status.trim()], (err) => {
+    if (err) {
+      console.error('Review Insert Error:', err);
+      return res.status(500).json({ error: 'Failed to submit review!' });
     }
-  
-    const reviewQuery = `
-      INSERT INTO reviews (reviewer_id, paper_id, comments, score, status)
-      VALUES (?, ?, ?, ?, ?)
+
+    const paperUpdateQuery = `
+      UPDATE papers SET status = ? WHERE id = ?
     `;
-  
-    db.query(reviewQuery, [reviewerId, paperId, reviewText.trim(), score, status.trim()], (err, result) => {
-      if (err) {
-        console.error('Review Insert Error:', err);
-        return res.status(500).json({ error: 'Failed to submit review!' });
+
+    db.query(paperUpdateQuery, [status.trim(), paperId], (err2) => {
+      if (err2) {
+        console.error('Paper Status Update Error:', err2);
+        return res.status(500).json({ error: 'Failed to update paper status!' });
       }
-  
-      const paperUpdateQuery = `
-        UPDATE papers SET status = ? WHERE id = ?
-      `;
-  
-      db.query(paperUpdateQuery, [status.trim(), paperId], (err2, result2) => {
-        if (err2) {
-          console.error('Paper Status Update Error:', err2);
-          return res.status(500).json({ error: 'Failed to update paper status!' });
-        }
-  
-        res.json({ message: 'Review submitted and paper status updated!' });
-      });
+
+      res.json({ message: 'Review submitted and paper status updated!' });
     });
   });
+});
+// ✅ User Profile Route (Protected)
+app.get('/profile', verifyToken, (req, res) => {
+  const userId = req.user.id;
 
-  
-  
+  console.log('User ID from token:', userId);
+
+  const query = 'SELECT name, email, profile_image  FROM users WHERE id = ?';
+  db.query(query, [userId], (err, results) => {
+    if (err) {
+      console.error('Database error:', err);
+      return res.status(500).json({ error: 'Server error!' });
+    }
+
+    console.log('Query results:', results);
+
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'User not found!' });
+    }
+
+    const user = results[0];
+    res.json({
+      username: user.name,
+      email: user.email,
+      profileImage: user.profile_image || null
+    });
+  });
+});
+
+
 
 // ===================== MIDDLEWARE ===================== //
 
