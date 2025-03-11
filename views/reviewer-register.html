@@ -2,30 +2,37 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Reviewer Signup</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reviewer Register | Conference Review System</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
 </head>
-<body>
-  <h1>Reviewer Registration</h1>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  <div class="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
+    <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Reviewer Register</h2>
 
-  <form id="reviewerRegisterForm">
-    <label>Name:</label><br/>
-    <input type="text" id="name" required><br/><br/>
+    <form id="reviewerRegisterForm" class="space-y-4">
+      <div>
+        <label class="block text-gray-700">Name</label>
+        <input type="text" id="name" required class="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-purple-400 focus:outline-none" />
+      </div>
+      <div>
+        <label class="block text-gray-700">Email</label>
+        <input type="email" id="email" required class="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-purple-400 focus:outline-none" />
+      </div>
+      <div>
+        <label class="block text-gray-700">Password</label>
+        <input type="password" id="password" required class="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-purple-400 focus:outline-none" />
+      </div>
 
-    <label>Email:</label><br/>
-    <input type="email" id="email" required><br/><br/>
+      <button type="submit" class="w-full bg-green-500 text-white py-2 rounded-md hover:bg-green-600 transition duration-300">Register</button>
 
-    <label>Password:</label><br/>
-    <input type="password" id="password" required><br/><br/>
+      <p id="message" class="text-center text-sm text-red-500"></p>
+    </form>
 
-    <button type="submit">Register as Reviewer</button>
-  </form>
-
-  <p id="message"></p>
-
-  <br/>
-  <a href="/reviewer-login">Already have an account? Login as Reviewer</a><br/><br/>
-  <a href="/">Back to User Login</a>
+    <div class="mt-6 text-center">
+      <p class="text-sm">Already have a reviewer account? <a href="reviewer-login.html" class="text-purple-500 hover:underline">Login here</a></p>
+    </div>
+  </div>
 
   <script>
     const form = document.getElementById('reviewerRegisterForm');
@@ -34,42 +41,28 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const name = document.getElementById('name').value.trim();
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value.trim();
-
-      if (!name || !email || !password) {
-        message.textContent = 'Please fill in all fields.';
-        return;
-      }
+      const name = document.getElementById('name').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
 
       try {
-        const response = await fetch('/reviewer-register', {
+        const response = await fetch('http://localhost:3000/reviewer-register', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, email, password })
         });
 
         const data = await response.json();
 
         if (response.ok) {
-          message.style.color = 'green';
-          message.textContent = data.message;
-          form.reset();
-          setTimeout(() => {
-            window.location.href = '/reviewer-login';
-          }, 2000);
+          message.textContent = 'Registration successful!';
+          setTimeout(() => window.location.href = 'reviewer-login.html', 1500);
         } else {
-          message.style.color = 'red';
-          message.textContent = data.error || 'Registration failed.';
+          message.textContent = data.error;
         }
-
       } catch (error) {
+        message.textContent = 'Something went wrong!';
         console.error(error);
-        message.style.color = 'red';
-        message.textContent = 'An error occurred. Please try again.';
       }
     });
   </script>

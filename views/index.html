@@ -1,25 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Login</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Login | Conference Review System</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
 </head>
-<body>
-  <h1>User Login</h1>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  <div class="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
+    <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">User Login</h2>
 
-  <form id="loginForm">
-    <label>Email: <input type="email" id="email" required></label><br><br>
-    <label>Password: <input type="password" id="password" required></label><br><br>
-    <button type="submit">Login</button>
-  </form>
+    <form id="loginForm" class="space-y-4">
+      <div>
+        <label class="block text-gray-700">Email</label>
+        <input type="email" id="email" required class="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none" />
+      </div>
+      <div>
+        <label class="block text-gray-700">Password</label>
+        <input type="password" id="password" required class="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none" />
+      </div>
 
-  <p id="message"></p>
+      <button type="submit" class="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 transition duration-300">Login</button>
 
-  <!-- Link to user registration page -->
-  <p>No account? <a href="register.html">Register here</a></p>
+      <p id="message" class="text-center text-sm text-red-500"></p>
+    </form>
 
-  <!-- ✅ New link to reviewer login page -->
-  <p>Are you a reviewer? <a href="reviewer-login.html">Reviewer Login</a></p>
+    <div class="mt-6 text-center">
+      <p class="text-sm">No account? <a href="register.html" class="text-blue-500 hover:underline">Register here</a></p>
+      <p class="text-sm mt-2">Reviewer? <a href="reviewer-login.html" class="text-blue-500 hover:underline">Reviewer Login</a></p>
+    </div>
+  </div>
 
   <script>
     const form = document.getElementById('loginForm');
@@ -42,8 +52,8 @@
 
         if (response.ok) {
           message.textContent = 'Login successful!';
-          localStorage.setItem('token', data.token);  // Save JWT token!
-          window.location.href = 'users.html';        // Redirect to protected page
+          localStorage.setItem('token', data.token);
+          window.location.href = 'users.html';
         } else {
           message.textContent = data.error;
         }

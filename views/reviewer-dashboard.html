@@ -4,13 +4,39 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Reviewer Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<body>
-  <h1>Welcome Reviewer!</h1>
-  <p>You are logged in.</p>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+  
+  <!-- Header -->
+  <header class="bg-purple-700 text-white p-4 shadow flex justify-between items-center">
+    <h1 class="text-2xl font-semibold">Reviewer Dashboard</h1>
+    <button 
+      onclick="logout()" 
+      class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded transition duration-300">
+      Logout
+    </button>
+  </header>
 
-  <button onclick="logout()">Logout</button>
+  <!-- Main Content -->
+  <main class="flex-grow container mx-auto p-6">
+    <div class="bg-white shadow-lg rounded-lg p-8">
+      <h2 class="text-xl font-bold mb-4 text-gray-800">Welcome Reviewer!</h2>
+      <p class="mb-6 text-gray-600">You are successfully logged in. Use the actions below to manage your reviews.</p>
 
+      <div class="space-y-4">
+        <a href="#" class="block w-full bg-indigo-500 hover:bg-indigo-600 text-white text-center px-4 py-2 rounded transition duration-300">View Assigned Papers</a>
+        <a href="#" class="block w-full bg-green-500 hover:bg-green-600 text-white text-center px-4 py-2 rounded transition duration-300">Submit New Review</a>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-gray-200 text-center text-gray-600 py-4">
+    &copy; 2025 Conference Review System
+  </footer>
+
+  <!-- Logout Script -->
   <script>
     function logout() {
       localStorage.removeItem('reviewerToken');

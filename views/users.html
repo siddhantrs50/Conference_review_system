@@ -3,31 +3,60 @@
 <head>
   <meta charset="UTF-8">
   <title>Users List (Protected)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Tailwind CSS CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<body>
-  <h1>Users</h1>
-  <ul id="userList"></ul>
-  <p id="message"></p>
+<body class="bg-gray-100 min-h-screen flex flex-col">
 
-  <button onclick="logout()">Logout</button>
+  <!-- Header -->
+  <header class="bg-blue-700 text-white p-4 shadow flex justify-between items-center">
+    <h1 class="text-2xl font-semibold">User Dashboard</h1>
+    <button 
+      onclick="logout()" 
+      class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded transition duration-300">
+      Logout
+    </button>
+  </header>
 
+  <!-- Main Content -->
+  <main class="flex-grow container mx-auto p-6">
+    <div class="bg-white shadow-lg rounded-lg p-8">
+      <h2 class="text-xl font-bold mb-4 text-gray-800">Registered Users</h2>
+      <p id="message" class="mb-4 text-red-600"></p>
+
+      <!-- User List -->
+      <ul id="userList" class="space-y-2">
+        <!-- Users will be appended here -->
+      </ul>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-gray-200 text-center text-gray-600 py-4">
+    &copy; 2025 Conference Review System
+  </footer>
+
+  <!-- JS Script -->
   <script>
     const userList = document.getElementById('userList');
     const message = document.getElementById('message');
 
-    // Function to logout
+    // Logout function
     function logout() {
       localStorage.removeItem('token');
       window.location.href = 'index.html';
     }
 
-    // Fetch users from backend (protected route)
+    // Fetch Users
     async function fetchUsers() {
       const token = localStorage.getItem('token');
 
       if (!token) {
         message.textContent = 'You must be logged in!';
-        window.location.href = 'index.html';
+        setTimeout(() => {
+          window.location.href = 'index.html';
+        }, 1500);
         return;
       }
 
@@ -39,13 +68,23 @@
         const data = await response.json();
 
         if (!response.ok) {
-          message.textContent = data.error || 'Failed to fetch users';
+          message.textContent = data.error || 'Failed to fetch users.';
+          return;
+        }
+
+        if (data.length === 0) {
+          userList.innerHTML = '<li class="text-gray-500">No users found.</li>';
           return;
         }
 
         data.forEach(user => {
           const li = document.createElement('li');
-          li.textContent = `ID: ${user.id}, Name: ${user.name}, Email: ${user.email}`;
+          li.className = "bg-gray-50 p-4 rounded shadow hover:bg-gray-100 transition";
+          li.innerHTML = `
+            <p><strong>ID:</strong> ${user.id}</p>
+            <p><strong>Name:</strong> ${user.name}</p>
+            <p><strong>Email:</strong> ${user.email}</p>
+          `;
           userList.appendChild(li);
         });
       } catch (error) {
@@ -54,6 +93,7 @@
       }
     }
 
+    // Run on page load
     fetchUsers();
   </script>
 </body>
