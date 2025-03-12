@@ -8,29 +8,25 @@ const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
 
-// ✅ Initialize Express App
 const app = express();
 const PORT = 3000;
 
-// ✅ Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('views')); // Serve static HTML files
-app.use('/uploads', express.static('uploads')); // Serve uploaded papers
+app.use(express.static('views'));
+app.use('/uploads', express.static('uploads'));
 
-// ✅ Secret key for JWT
 const SECRET_KEY = 'supersecretkey';
 
-// ✅ MySQL Connection Config
+// ✅ MySQL connection
 const db = mysql.createConnection({
   host: 'localhost',
   user: 'root',
-  password: '13108375007',         
+  password: '13108375007',
   database: 'mydatabase'
 });
 
-// ✅ Connect to MySQL
-db.connect((err) => {
+db.connect(err => {
   if (err) {
     console.error('❌ MySQL connection failed:', err);
     return;
@@ -38,13 +34,11 @@ db.connect((err) => {
   console.log('✅ Connected to MySQL Database');
 });
 
-// ✅ Multer Setup for File Uploads
+// ✅ Multer file upload setup
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = './uploads';
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir);
-    }
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
     cb(null, dir);
   },
   filename: (req, file, cb) => {
@@ -53,316 +47,300 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// ===================== PAGE ROUTES ===================== //
+/* ==================================================
+   PAGE ROUTES
+================================================== */
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'views', 'index.html')));
+app.get('/register', (req, res) => res.sendFile(path.join(__dirname, 'views', 'register.html')));
+app.get('/user', (req, res) => res.sendFile(path.join(__dirname, 'views', 'user.html')));
+app.get('/reviewer-register', (req, res) => res.sendFile(path.join(__dirname, 'views', 'reviewer-register.html')));
+app.get('/reviewer-login', (req, res) => res.sendFile(path.join(__dirname, 'views', 'reviewer-login.html')));
+app.get('/reviewer-dashboard', (req, res) => res.sendFile(path.join(__dirname, 'views', 'reviewer-dashboard.html')));
+app.get('/admin-register', (req, res) => res.sendFile(path.join(__dirname, 'views', 'admin-register.html')));
+app.get('/admin-login', (req, res) => res.sendFile(path.join(__dirname, 'views', 'admin-login.html')));
+app.get('/admin-dashboard', (req, res) => res.sendFile(path.join(__dirname, 'views', 'admin-dashboard.html')));
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'index.html'));
-});
-app.get('/register', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'register.html'));
-});
-app.get('/user', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'user.html'));
-});
-app.get('/reviewer-register', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'reviewer-register.html'));
-});
-app.get('/reviewer-login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'reviewer-login.html'));
-});
-app.get('/reviewer-dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'reviewer-dashboard.html'));
-});
-
-// ===================== USER ROUTES ===================== //
-
-// ✅ User Registration
+/* ==================================================
+   USER ROUTES (RESEARCHERS)
+================================================== */
 app.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
-  if (!name || !email || !password) return res.status(400).json({ error: 'All fields are required!' });
+  if (!name || !email || !password)
+    return res.status(400).json({ error: 'All fields are required!' });
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const query = 'INSERT INTO users (name, email, password) VALUES (?, ?, ?)';
-    db.query(query, [name, email, hashedPassword], (err) => {
-      if (err) return res.status(500).json({ error: 'User registration failed!' });
-      res.json({ message: 'User registered successfully!' });
-    });
+    db.query('INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
+      [name, email, hashedPassword],
+      err => {
+        if (err) return res.status(500).json({ error: 'User registration failed!' });
+        res.json({ message: 'User registered successfully!' });
+      });
   } catch (error) {
     res.status(500).json({ error: 'Something went wrong!' });
   }
 });
 
-// ✅ User Login
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password are required!' });
+  db.query('SELECT * FROM users WHERE email = ?', [email], async (err, results) => {
+    if (err || results.length === 0)
+      return res.status(400).json({ error: 'User not found!' });
 
-  const query = 'SELECT * FROM users WHERE email = ?';
-  db.query(query, [email], async (err, results) => {
-    if (err || results.length === 0) return res.status(400).json({ error: 'User not found!' });
-    
     const user = results[0];
     const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) return res.status(401).json({ error: 'Invalid password!' });
+    if (!isValid)
+      return res.status(401).json({ error: 'Invalid password!' });
 
-    const token = jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: '1h' });
+    const token = jwt.sign({ id: user.id, email: user.email, role: 'user' }, SECRET_KEY);
     res.json({ message: 'Login successful!', token });
   });
 });
 
-// ✅ Upload Paper (Protected)
 app.post('/upload-paper', verifyToken, upload.single('paper'), (req, res) => {
   const userId = req.user.id;
   const { title, description, abstract } = req.body;
   const paperDescription = description || abstract;
-
-  if (!req.file) {
+  if (!req.file)
     return res.status(400).json({ error: 'No file uploaded!' });
-  }
 
-  const filePath = req.file.path; // uploads/filename
-
-  const query = 'INSERT INTO papers (user_id, title, description, file_path, status) VALUES (?, ?, ?, ?, ?)';
-  db.query(query, [userId, title, paperDescription, filePath, 'Submitted'], (err) => {
-    if (err) {
-      console.error('DB Insert Error:', err);
-      return res.status(500).json({ error: 'Paper submission failed!' });
-    }
+  const filePath = req.file.path;
+  const query = 'INSERT INTO papers (user_id, title, description, file_path, status, created_at) VALUES (?, ?, ?, ?, ?, NOW())';
+  db.query(query, [userId, title, paperDescription, filePath, 'Submitted'], err => {
+    if (err) return res.status(500).json({ error: 'Paper submission failed!' });
     res.json({ message: 'Paper submitted successfully!' });
   });
 });
 
-// ✅ Get User Papers (Protected)
 app.get('/my-papers', verifyToken, (req, res) => {
   const userId = req.user.id;
-
-  const query = 'SELECT * FROM papers WHERE user_id = ?';
-  db.query(query, [userId], (err, results) => {
-    if (err) {
-      console.error('Database error:', err);
-      return res.status(500).json({ error: 'Failed to fetch papers!' });
-    }
-
-    res.json(results);
-  });
-});
-
-// ✅ Download Uploaded Paper by Filename (Optional Helper Route)
-app.get('/uploads/:filename', (req, res) => {
-  const filename = req.params.filename;
-  const filepath = path.join(__dirname, 'uploads', filename);
-
-  fs.access(filepath, fs.constants.F_OK, (err) => {
-    if (err) {
-      console.error('File not found:', filepath);
-      return res.status(404).json({ error: 'File not found' });
-    }
-
-    res.sendFile(filepath);
-  });
-});
-
-// ✅ User Profile Route (Protected)
-app.get('/profile', verifyToken, (req, res) => {
-  const userId = req.user.id;
-
-  const query = 'SELECT name, email FROM users WHERE id = ?';
-
-  db.query(query, [userId], (err, results) => {
-    if (err) {
-      console.error('Database error fetching user profile:', err);
-      return res.status(500).json({ error: 'Failed to fetch user profile!' });
-    }
-
-    if (results.length === 0) {
-      return res.status(404).json({ error: 'User not found!' });
-    }
-
-    const user = results[0];
-    res.json({
-      name: user.name,
-      email: user.email,
-      role: 'User'
-    });
-  });
-});
-
-
-
-// ===================== REVIEWER ROUTES ===================== //
-
-// ✅ Reviewer Registration
-app.post('/reviewer-register', async (req, res) => {
-  const { name, email, password } = req.body;
-  if (!name || !email || !password) return res.status(400).json({ error: 'All fields are required!' });
-
-  try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const query = 'INSERT INTO reviewers (name, email, password) VALUES (?, ?, ?)';
-    db.query(query, [name, email, hashedPassword], (err) => {
-      if (err) return res.status(500).json({ error: 'Reviewer registration failed!' });
-      res.json({ message: 'Reviewer registered successfully!' });
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Something went wrong!' });
-  }
-});
-
-// ✅ Reviewer Login
-app.post('/reviewer-login', (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password are required!' });
-
-  const query = 'SELECT * FROM reviewers WHERE email = ?';
-  db.query(query, [email], async (err, results) => {
-    if (err || results.length === 0) return res.status(400).json({ error: 'Reviewer not found!' });
-
-    const reviewer = results[0];
-    const isValid = await bcrypt.compare(password, reviewer.password);
-    if (!isValid) return res.status(401).json({ error: 'Invalid password!' });
-
-    const token = jwt.sign({ id: reviewer.id, email: reviewer.email }, SECRET_KEY, { expiresIn: '1h' });
-    res.json({ message: 'Reviewer login successful!', token });
-  });
-});
-
-// ✅ Get Papers for Review (Protected)
-app.get('/review-papers', verifyToken, (req, res) => {
-  const query = 'SELECT * FROM papers WHERE status = "Submitted"';
-  db.query(query, (err, results) => {
+  db.query('SELECT * FROM papers WHERE user_id = ?', [userId], (err, results) => {
     if (err) return res.status(500).json({ error: 'Failed to fetch papers!' });
     res.json(results);
   });
 });
 
-// ✅ Submit Review (Protected)
+app.get('/profile', verifyToken, (req, res) => {
+  const userId = req.user.id;
+  db.query('SELECT name, email FROM users WHERE id = ?', [userId], (err, results) => {
+    if (err || results.length === 0)
+      return res.status(404).json({ error: 'User not found!' });
+
+    const user = results[0];
+    res.json({ username: user.name, email: user.email, role: 'Author' });
+  });
+});
+
+/* ==================================================
+   REVIEWER ROUTES
+================================================== */
+app.post('/reviewer-register', async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password)
+    return res.status(400).json({ error: 'All fields are required!' });
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  db.query('INSERT INTO reviewers (name, email, password) VALUES (?, ?, ?)',
+    [name, email, hashedPassword],
+    err => {
+      if (err) return res.status(500).json({ error: 'Reviewer registration failed!' });
+      res.json({ message: 'Reviewer registered successfully!' });
+    });
+});
+
+app.post('/reviewer-login', (req, res) => {
+  const { email, password } = req.body;
+  db.query('SELECT * FROM reviewers WHERE email = ?', [email], async (err, results) => {
+    if (err || results.length === 0)
+      return res.status(400).json({ error: 'Reviewer not found!' });
+
+    const reviewer = results[0];
+    const isValid = await bcrypt.compare(password, reviewer.password);
+    if (!isValid)
+      return res.status(401).json({ error: 'Invalid password!' });
+
+    const token = jwt.sign({ id: reviewer.id, email: reviewer.email, role: 'reviewer' }, SECRET_KEY);
+    res.json({ message: 'Reviewer login successful!', token });
+  });
+});
+
+app.get('/review-papers', verifyToken, (req, res) => {
+  const reviewerId = req.user.id;
+  const query = `
+    SELECT p.* FROM papers p
+    JOIN paper_reviewers pr ON p.id = pr.paper_id
+    WHERE pr.reviewer_id = ?
+    AND p.id NOT IN (
+      SELECT paper_id FROM reviews WHERE reviewer_id = ?
+    )
+  `;
+  db.query(query, [reviewerId, reviewerId], (err, results) => {
+    if (err) return res.status(500).json({ error: 'Failed to fetch assigned papers!' });
+    res.json(results);
+  });
+});
+
+
 app.post('/submit-review', verifyToken, (req, res) => {
   const reviewerId = req.user.id;
   const { paperId, reviewText, score, status } = req.body;
 
-  if (
-    typeof paperId === 'undefined' ||
-    typeof reviewText !== 'string' || reviewText.trim() === '' ||
-    typeof score === 'undefined' ||
-    typeof status !== 'string' || status.trim() === ''
-  ) {
+  if (!paperId || !reviewText || !score || !status)
     return res.status(400).json({ error: 'All fields are required!' });
-  }
 
-  const reviewQuery = `
-    INSERT INTO reviews (reviewer_id, paper_id, comments, score, status)
-    VALUES (?, ?, ?, ?, ?)
+  // Check if a review already exists for this paper and reviewer
+  const checkQuery = `
+    SELECT * FROM reviews WHERE reviewer_id = ? AND paper_id = ?
   `;
-
-  db.query(reviewQuery, [reviewerId, paperId, reviewText.trim(), score, status.trim()], (err) => {
-    if (err) {
-      console.error('Review Insert Error:', err);
-      return res.status(500).json({ error: 'Failed to submit review!' });
+  db.query(checkQuery, [reviewerId, paperId], (err, results) => {
+    if (err) return res.status(500).json({ error: 'Database error!' });
+    if (results.length > 0) {
+      return res.status(400).json({ error: 'Review already submitted!' });
     }
 
-    const paperUpdateQuery = `
-      UPDATE papers SET status = ? WHERE id = ?
+    // Insert review if not exists
+    const reviewQuery = `
+      INSERT INTO reviews (reviewer_id, paper_id, comments, score, status)
+      VALUES (?, ?, ?, ?, ?)
     `;
+    db.query(reviewQuery, [reviewerId, paperId, reviewText, score, status], err => {
+      if (err) return res.status(500).json({ error: 'Failed to submit review!' });
 
-    db.query(paperUpdateQuery, [status.trim(), paperId], (err2) => {
-      if (err2) {
-        console.error('Paper Status Update Error:', err2);
-        return res.status(500).json({ error: 'Failed to update paper status!' });
-      }
-
-      res.json({ message: 'Review submitted and paper status updated!' });
+      db.query('UPDATE papers SET status = ? WHERE id = ?', [status, paperId], err2 => {
+        if (err2) return res.status(500).json({ error: 'Failed to update paper status!' });
+        res.json({ message: 'Review submitted and paper status updated!' });
+      });
     });
   });
 });
 
-// ✅ Reviewer Reviewed Papers Route (Protected)
+
 app.get('/reviewer-reviewed-papers', verifyToken, (req, res) => {
   const reviewerId = req.user.id;
-
   const query = `
-    SELECT p.id, p.title, p.description, p.file_path, r.score, r.status, r.comments
+    SELECT p.title, r.score, r.status, r.comments
     FROM reviews r
     JOIN papers p ON r.paper_id = p.id
     WHERE r.reviewer_id = ?
   `;
-
   db.query(query, [reviewerId], (err, results) => {
-    if (err) {
-      console.error('Database error fetching reviewed papers:', err);
-      return res.status(500).json({ error: 'Failed to fetch reviewed papers!' });
-    }
-
+    if (err) return res.status(500).json({ error: 'Failed to fetch reviewed papers!' });
     res.json(results);
   });
 });
 
-// ✅ Reviewer Unreviewed Papers Route (Protected)
-app.get('/reviewer-unreviewed-papers', verifyToken, (req, res) => {
-  const reviewerId = req.user.id;
-
-  const query = `
-    SELECT p.*
-    FROM papers p
-    WHERE p.id NOT IN (
-      SELECT paper_id FROM reviews WHERE reviewer_id = ?
-    ) AND p.status = 'Submitted'
-  `;
-
-  db.query(query, [reviewerId], (err, results) => {
-    if (err) {
-      console.error('Database error fetching unreviewed papers:', err);
-      return res.status(500).json({ error: 'Failed to fetch unreviewed papers!' });
-    }
-
-    res.json(results);
-  });
-});
-
-// ✅ Reviewer Profile Route (Protected)
 app.get('/reviewer-profile', verifyToken, (req, res) => {
   const reviewerId = req.user.id;
-
-  const query = 'SELECT name, email FROM reviewers WHERE id = ?';
-
-  db.query(query, [reviewerId], (err, results) => {
-    if (err) {
-      console.error('Database error fetching reviewer profile:', err);
-      return res.status(500).json({ error: 'Failed to fetch reviewer profile!' });
-    }
-
-    if (results.length === 0) {
+  db.query('SELECT name, email FROM reviewers WHERE id = ?', [reviewerId], (err, results) => {
+    if (err || results.length === 0)
       return res.status(404).json({ error: 'Reviewer not found!' });
-    }
 
-    const reviewer = results[0];
-    res.json({
-      name: reviewer.name,
-      email: reviewer.email
-    });
+    res.json({ name: results[0].name, email: results[0].email, role: 'Reviewer' });
   });
 });
 
+/* ==================================================
+   ADMIN ROUTES
+================================================== */
+app.post('/admin-register', async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password)
+    return res.status(400).json({ error: 'All fields are required!' });
 
+  const hashedPassword = await bcrypt.hash(password, 10);
+  db.query('INSERT INTO admins (name, email, password) VALUES (?, ?, ?)',
+    [name, email, hashedPassword],
+    err => {
+      if (err) return res.status(500).json({ error: 'Admin registration failed!' });
+      res.json({ message: 'Admin registered successfully!' });
+    });
+});
 
+app.post('/admin-login', (req, res) => {
+  const { email, password } = req.body;
+  db.query('SELECT * FROM admins WHERE email = ?', [email], async (err, results) => {
+    if (err || results.length === 0)
+      return res.status(400).json({ error: 'Admin not found!' });
 
+    const admin = results[0];
+    const isValid = await bcrypt.compare(password, admin.password);
+    if (!isValid)
+      return res.status(401).json({ error: 'Invalid password!' });
 
-// ===================== MIDDLEWARE ===================== //
+    const token = jwt.sign({ id: admin.id, email: admin.email, role: 'admin' }, SECRET_KEY);
+    res.json({ message: 'Admin login successful!', token });
+  });
+});
 
-// ✅ JWT Verification
+app.get('/admin-profile', verifyAdmin, (req, res) => {
+  db.query('SELECT name, email FROM admins WHERE id = ?', [req.admin.id], (err, results) => {
+    if (err || results.length === 0)
+      return res.status(404).json({ error: 'Admin not found!' });
+
+    res.json({ name: results[0].name, email: results[0].email });
+  });
+});
+
+app.get('/admin-papers', verifyAdmin, (req, res) => {
+  db.query('SELECT * FROM papers', (err, results) => {
+    if (err) return res.status(500).json({ error: 'Failed to fetch papers!' });
+    res.json(results);
+    console.log(res);
+  });
+});
+
+app.get('/admin-reviewers', verifyAdmin, (req, res) => {
+  db.query('SELECT id, name, email FROM reviewers', (err, results) => {
+    if (err) return res.status(500).json({ error: 'Failed to fetch reviewers!' });
+    res.json(results);
+    console.log(res);
+  });
+});
+
+app.post('/admin-assign-reviewer', verifyAdmin, (req, res) => {
+  const { paperId, reviewerId } = req.body;
+  if (!paperId || !reviewerId)
+    return res.status(400).json({ error: 'Paper ID and Reviewer ID are required!' });
+
+  db.query('INSERT INTO paper_reviewers (paper_id, reviewer_id) VALUES (?, ?)',
+    [paperId, reviewerId], err => {
+      if (err) return res.status(500).json({ error: 'Failed to assign reviewer!' });
+      res.json({ message: 'Reviewer assigned successfully!' });
+    });
+});
+
+/* ==================================================
+   MIDDLEWARE
+================================================== */
 function verifyToken(req, res, next) {
   const bearerHeader = req.headers['authorization'];
-  if (!bearerHeader) return res.status(403).json({ error: 'Authorization token missing!' });
+  if (!bearerHeader)
+    return res.status(403).json({ error: 'Authorization token missing!' });
 
   const token = bearerHeader.split(' ')[1];
   jwt.verify(token, SECRET_KEY, (err, decoded) => {
-    if (err) return res.status(401).json({ error: 'Invalid or expired token!' });
+    if (err)
+      return res.status(401).json({ error: 'Invalid or expired token!' });
     req.user = decoded;
     next();
   });
 }
 
-// ✅ Start Server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
-});
+function verifyAdmin(req, res, next) {
+  const bearerHeader = req.headers['authorization'];
+  if (!bearerHeader)
+    return res.status(403).json({ error: 'Authorization token missing!' });
+
+  const token = bearerHeader.split(' ')[1];
+  jwt.verify(token, SECRET_KEY, (err, decoded) => {
+    if (err || decoded.role !== 'admin')
+      return res.status(401).json({ error: 'Unauthorized admin!' });
+    req.admin = decoded;
+    next();
+  });
+}
+
+/* ==================================================
+   START SERVER
+================================================== */
+app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));

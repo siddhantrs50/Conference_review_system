@@ -31,7 +31,7 @@
     <!-- My Papers Section -->
     <section id="myPapersSection">
       <h1 class="text-3xl font-bold mb-6">Your Submitted Papers</h1>
-      <div class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md">
+      <div id="papersContainer" class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md">
         <ul id="papersList" class="space-y-4">
           <!-- Papers will load here -->
         </ul>
@@ -58,8 +58,7 @@
       <div class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md space-y-4">
         <p><strong>Name:</strong> <span id="profileName" class="text-yellow-300">Loading...</span></p>
         <p><strong>Email:</strong> <span id="profileEmail" class="text-yellow-300">Loading...</span></p>
-        <p><strong>Role:</strong> <span id="profileRole" class="text-yellow-300">Loading...</span></p>
-        <!-- Add more fields if needed -->
+        <p><strong>Role:</strong> <span id="profileRole" class="text-yellow-300">Author</span></p>
       </div>
     </section>
 
@@ -67,16 +66,16 @@
 
   <script>
     const userToken = localStorage.getItem('token');
+
     const paperForm = document.getElementById('paperForm');
     const papersList = document.getElementById('papersList');
     const uploadMessage = document.getElementById('uploadMessage');
 
     if (!userToken) {
-      alert('You are not logged in! Redirecting to login page...');
+      alert('You are not logged in! Redirecting...');
       window.location.href = 'index.html';
     }
 
-    // Section Toggle Functionality
     function showSection(section) {
       document.getElementById('myPapersSection').classList.add('hidden');
       document.getElementById('addPaperSection').classList.add('hidden');
@@ -88,30 +87,15 @@
         document.getElementById('addPaperSection').classList.remove('hidden');
       } else if (section === 'myProfile') {
         document.getElementById('myProfileSection').classList.remove('hidden');
-        fetchUserProfile();  // 👈 fetch profile info when "My Profile" is clicked
+        fetchUserProfile();
       }
     }
 
-    // Fetch Papers on page load
-    window.addEventListener('DOMContentLoaded', () => {
-      fetchPapers();
-      showSection('myPapers'); // Show My Papers by default
-      fetchUserProfile();      // 👈 Also fetch profile data on page load
-    });
-
-    // Fetch Papers Function
     async function fetchPapers() {
       try {
         const res = await fetch('http://localhost:3000/my-papers', {
           headers: { 'Authorization': `Bearer ${userToken}` }
         });
-
-        if (!res.ok) {
-          console.error('Error fetching papers:', res.statusText);
-          papersList.innerHTML = '<li>No papers found or an error occurred.</li>';
-          return;
-        }
-
         const papers = await res.json();
         papersList.innerHTML = '';
 
@@ -121,64 +105,36 @@
         }
 
         papers.forEach(paper => {
-            const fileName = paper.file_path.split('/').pop();
-            const createdDate = new Date(paper.created_at).toLocaleDateString();
-            console.log(paper);
-            // Decide color class based on status
-            let bgColorClass = '';
-            const statusLower = paper.status.toLowerCase();
+          const fileName = paper.file_path.split('/').pop();
+          const createdDate = new Date(paper.created_at).toLocaleDateString();
+          let colorClass = paper.status === 'Accepted' ? 'border-green-400' :
+                           paper.status === 'Rejected' ? 'border-red-400' : 'border-yellow-400';
 
-            if (statusLower === 'rejected') {
-              bgColorClass = 'bg-red-500 bg-opacity-20';
-            } else if (statusLower === 'accepted') {
-              bgColorClass = 'bg-green-500 bg-opacity-20';
-            } else {
-              bgColorClass = 'bg-yellow-500 bg-opacity-20';
-            }
-
-            papersList.innerHTML += `
-              <li class="${bgColorClass} p-4 rounded relative">
-                <h3 class="text-lg font-bold mb-2">${paper.title}</h3>
-                <p class="text-sm mb-2 text-yellow-400">Status: ${paper.status}</p>
-                <a href="http://localhost:3000/uploads/${fileName}" target="_blank" class="text-blue-300 underline mt-2 inline-block">Download Paper</a>
-                <p class="text-xs text-gray-400 absolute bottom-2 right-4">Submitted: ${createdDate}</p>
-              </li>
-            `;
-          });
-
-
+          papersList.innerHTML += `
+            <li class="bg-white bg-opacity-10 p-4 rounded border-l-8 ${colorClass} relative">
+              <h3 class="text-lg font-bold mb-2">${paper.title}</h3>
+              <p class="text-sm mb-2 text-yellow-400">Status: ${paper.status}</p>
+              <a href="http://localhost:3000/uploads/${fileName}" target="_blank" class="text-blue-300 underline mt-2 inline-block">Download Paper</a>
+              <p class="text-xs text-gray-400 absolute bottom-2 right-4">Submitted: ${createdDate}</p>
+            </li>
+          `;
+        });
       } catch (err) {
-        console.error('Fetch papers error:', err);
-        papersList.innerHTML = '<li class="text-red-400">Failed to load papers.</li>';
+        console.error(err);
       }
     }
 
-    // Fetch User Profile Function
     function fetchUserProfile() {
-  fetch('http://localhost:3000/profile', {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${userToken}`
-    }
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.error) {
-      alert(data.error);
-      return;
+      fetch('http://localhost:3000/profile', {
+        headers: { 'Authorization': `Bearer ${userToken}` }
+      })
+      .then(res => res.json())
+      .then(profile => {
+        document.getElementById('profileName').textContent = profile.username;
+        document.getElementById('profileEmail').textContent = profile.email;
+      });
     }
 
-    document.getElementById('profileName').innerText = data.name;
-    document.getElementById('profileEmail').innerText = data.email;
-    document.getElementById('profileRole').innerText = data.role;
-  })
-  .catch(err => {
-    console.error('Error fetching profile:', err);
-  });
-}
-
-
-    // Handle Paper Submission
     paperForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
@@ -186,55 +142,41 @@
       const abstract = document.getElementById('abstract').value;
       const paperFile = document.getElementById('paperFile').files[0];
 
-      if (!paperFile) {
-        uploadMessage.textContent = 'Please select a PDF file';
-        uploadMessage.classList.add('text-red-400');
-        return;
-      }
-
       const formData = new FormData();
       formData.append('title', title);
       formData.append('description', abstract);
       formData.append('paper', paperFile);
 
-      try {
-        const res = await fetch('http://localhost:3000/upload-paper', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${userToken}`
-          },
-          body: formData
-        });
+      const res = await fetch('http://localhost:3000/upload-paper', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${userToken}` },
+        body: formData
+      });
 
-        const data = await res.json();
+      const result = await res.json();
 
-        if (res.ok) {
-          uploadMessage.textContent = '✅ Paper uploaded successfully!';
-          uploadMessage.classList.remove('text-red-400');
-          uploadMessage.classList.add('text-green-400');
-          paperForm.reset();
-          fetchPapers(); // Refresh papers list
-          showSection('myPapers'); // Switch back to My Papers section
-        } else {
-          uploadMessage.textContent = data.error || 'Upload failed!';
-          uploadMessage.classList.remove('text-green-400');
-          uploadMessage.classList.add('text-red-400');
-        }
-      } catch (err) {
-        console.error('Upload error:', err);
-        uploadMessage.textContent = 'An error occurred during upload.';
+      if (res.ok) {
+        uploadMessage.textContent = '✅ Paper uploaded successfully!';
+        uploadMessage.classList.add('text-green-400');
+        paperForm.reset();
+        fetchPapers();
+        showSection('myPapers');
+      } else {
+        uploadMessage.textContent = result.error;
         uploadMessage.classList.add('text-red-400');
       }
     });
 
-    // Logout function
     document.getElementById('logoutBtn').addEventListener('click', () => {
       localStorage.removeItem('token');
       window.location.href = 'index.html';
     });
 
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchPapers();
+      showSection('myPapers');
+      fetchUserProfile();
+    });
   </script>
-
 </body>
-
 </html>

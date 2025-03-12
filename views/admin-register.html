@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Registration | Conference Review System</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+</head>
+<body class="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-900 to-gray-900 text-white">
+
+  <div class="bg-white bg-opacity-10 backdrop-blur-md border border-white border-opacity-30 rounded-lg shadow-lg p-8 w-full max-w-md">
+
+    <h2 class="text-3xl font-bold mb-6 text-center text-white">Admin Registration</h2>
+
+    <form id="adminRegisterForm" class="space-y-4">
+      <div>
+        <label class="block text-sm mb-1">Name</label>
+        <input type="text" id="name" required class="w-full px-4 py-2 rounded bg-white text-black" placeholder="Admin Name" />
+      </div>
+
+      <div>
+        <label class="block text-sm mb-1">Email</label>
+        <input type="email" id="email" required class="w-full px-4 py-2 rounded bg-white text-black" placeholder="Admin Email" />
+      </div>
+
+      <div>
+        <label class="block text-sm mb-1">Password</label>
+        <input type="password" id="password" required class="w-full px-4 py-2 rounded bg-white text-black" placeholder="Password" />
+      </div>
+
+      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded">Register</button>
+
+      <p id="message" class="text-center text-red-400 mt-2"></p>
+    </form>
+
+    <div class="mt-6 text-center text-sm">
+      <a href="admin-login.html" class="text-blue-300 hover:underline">Already have an account? Login here</a>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('adminRegisterForm');
+    const message = document.getElementById('message');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById('name').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('http://localhost:3000/admin-register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          message.textContent = 'Registration successful!';
+          setTimeout(() => window.location.href = 'admin-login.html', 1500);
+        } else {
+          message.textContent = data.error;
+        }
+      } catch (err) {
+        console.error(err);
+        message.textContent = 'Something went wrong!';
+      }
+    });
+  </script>
+
+</body>
+</html>
