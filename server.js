@@ -163,6 +163,33 @@ app.get('/uploads/:filename', (req, res) => {
   });
 });
 
+// ✅ User Profile Route (Protected)
+app.get('/profile', verifyToken, (req, res) => {
+  const userId = req.user.id;
+
+  const query = 'SELECT name, email FROM users WHERE id = ?';
+
+  db.query(query, [userId], (err, results) => {
+    if (err) {
+      console.error('Database error fetching user profile:', err);
+      return res.status(500).json({ error: 'Failed to fetch user profile!' });
+    }
+
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'User not found!' });
+    }
+
+    const user = results[0];
+    res.json({
+      name: user.name,
+      email: user.email,
+      role: 'User'
+    });
+  });
+});
+
+
+
 // ===================== REVIEWER ROUTES ===================== //
 
 // ✅ Reviewer Registration
@@ -248,33 +275,75 @@ app.post('/submit-review', verifyToken, (req, res) => {
     });
   });
 });
-// ✅ User Profile Route (Protected)
-app.get('/profile', verifyToken, (req, res) => {
-  const userId = req.user.id;
 
-  console.log('User ID from token:', userId);
+// ✅ Reviewer Reviewed Papers Route (Protected)
+app.get('/reviewer-reviewed-papers', verifyToken, (req, res) => {
+  const reviewerId = req.user.id;
 
-  const query = 'SELECT name, email, profile_image  FROM users WHERE id = ?';
-  db.query(query, [userId], (err, results) => {
+  const query = `
+    SELECT p.id, p.title, p.description, p.file_path, r.score, r.status, r.comments
+    FROM reviews r
+    JOIN papers p ON r.paper_id = p.id
+    WHERE r.reviewer_id = ?
+  `;
+
+  db.query(query, [reviewerId], (err, results) => {
     if (err) {
-      console.error('Database error:', err);
-      return res.status(500).json({ error: 'Server error!' });
+      console.error('Database error fetching reviewed papers:', err);
+      return res.status(500).json({ error: 'Failed to fetch reviewed papers!' });
     }
 
-    console.log('Query results:', results);
+    res.json(results);
+  });
+});
+
+// ✅ Reviewer Unreviewed Papers Route (Protected)
+app.get('/reviewer-unreviewed-papers', verifyToken, (req, res) => {
+  const reviewerId = req.user.id;
+
+  const query = `
+    SELECT p.*
+    FROM papers p
+    WHERE p.id NOT IN (
+      SELECT paper_id FROM reviews WHERE reviewer_id = ?
+    ) AND p.status = 'Submitted'
+  `;
+
+  db.query(query, [reviewerId], (err, results) => {
+    if (err) {
+      console.error('Database error fetching unreviewed papers:', err);
+      return res.status(500).json({ error: 'Failed to fetch unreviewed papers!' });
+    }
+
+    res.json(results);
+  });
+});
+
+// ✅ Reviewer Profile Route (Protected)
+app.get('/reviewer-profile', verifyToken, (req, res) => {
+  const reviewerId = req.user.id;
+
+  const query = 'SELECT name, email FROM reviewers WHERE id = ?';
+
+  db.query(query, [reviewerId], (err, results) => {
+    if (err) {
+      console.error('Database error fetching reviewer profile:', err);
+      return res.status(500).json({ error: 'Failed to fetch reviewer profile!' });
+    }
 
     if (results.length === 0) {
-      return res.status(404).json({ error: 'User not found!' });
+      return res.status(404).json({ error: 'Reviewer not found!' });
     }
 
-    const user = results[0];
+    const reviewer = results[0];
     res.json({
-      username: user.name,
-      email: user.email,
-      profileImage: user.profile_image || null
+      name: reviewer.name,
+      email: reviewer.email
     });
   });
 });
+
+
 
 
 

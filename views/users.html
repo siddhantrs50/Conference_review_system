@@ -121,16 +121,32 @@
         }
 
         papers.forEach(paper => {
-          const fileName = paper.file_path.split('/').pop();
+            const fileName = paper.file_path.split('/').pop();
+            const createdDate = new Date(paper.created_at).toLocaleDateString();
+            console.log(paper);
+            // Decide color class based on status
+            let bgColorClass = '';
+            const statusLower = paper.status.toLowerCase();
 
-          papersList.innerHTML += `
-            <li class="bg-white bg-opacity-10 p-4 rounded">
-              <h3 class="text-lg font-bold mb-2">${paper.title}</h3>
-              <p class="text-sm mb-2 text-yellow-400">Status: ${paper.status}</p>
-              <a href="http://localhost:3000/uploads/${fileName}" target="_blank" class="text-blue-300 underline mt-2 inline-block">Download Paper</a>
-            </li>
-          `;
-        });
+            if (statusLower === 'rejected') {
+              bgColorClass = 'bg-red-500 bg-opacity-20';
+            } else if (statusLower === 'accepted') {
+              bgColorClass = 'bg-green-500 bg-opacity-20';
+            } else {
+              bgColorClass = 'bg-yellow-500 bg-opacity-20';
+            }
+
+            papersList.innerHTML += `
+              <li class="${bgColorClass} p-4 rounded relative">
+                <h3 class="text-lg font-bold mb-2">${paper.title}</h3>
+                <p class="text-sm mb-2 text-yellow-400">Status: ${paper.status}</p>
+                <a href="http://localhost:3000/uploads/${fileName}" target="_blank" class="text-blue-300 underline mt-2 inline-block">Download Paper</a>
+                <p class="text-xs text-gray-400 absolute bottom-2 right-4">Submitted: ${createdDate}</p>
+              </li>
+            `;
+          });
+
+
       } catch (err) {
         console.error('Fetch papers error:', err);
         papersList.innerHTML = '<li class="text-red-400">Failed to load papers.</li>';
@@ -138,27 +154,29 @@
     }
 
     // Fetch User Profile Function
-    async function fetchUserProfile() {
-      try {
-        const res = await fetch('http://localhost:3000/profile', {
-          headers: { 'Authorization': `Bearer ${userToken}` }
-        });
-
-        if (!res.ok) {
-          console.error('Error fetching profile:', res.statusText);
-          return;
-        }
-
-        const profile = await res.json();
-
-        document.getElementById('profileName').textContent = profile.username || 'N/A';
-        document.getElementById('profileEmail').textContent = profile.email || 'N/A';
-        document.getElementById('profileRole').textContent = profile.role || 'Author';  // Default role if not returned
-
-      } catch (err) {
-        console.error('Fetch profile error:', err);
-      }
+    function fetchUserProfile() {
+  fetch('http://localhost:3000/profile', {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${userToken}`
     }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.error) {
+      alert(data.error);
+      return;
+    }
+
+    document.getElementById('profileName').innerText = data.name;
+    document.getElementById('profileEmail').innerText = data.email;
+    document.getElementById('profileRole').innerText = data.role;
+  })
+  .catch(err => {
+    console.error('Error fetching profile:', err);
+  });
+}
+
 
     // Handle Paper Submission
     paperForm.addEventListener('submit', async (e) => {
