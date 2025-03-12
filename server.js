@@ -183,33 +183,30 @@ app.get('/review-papers', verifyToken, (req, res) => {
 
 app.post('/submit-review', verifyToken, (req, res) => {
   const reviewerId = req.user.id;
-  const { paperId, reviewText, score, status } = req.body;
+  const { paperId, userComment, adminComment, score, status } = req.body;
 
-  if (!paperId || !reviewText || !score || !status)
+  if (!paperId || !userComment || !adminComment || !score || !status) {
     return res.status(400).json({ error: 'All fields are required!' });
+  }
 
-  // Check if a review already exists for this paper and reviewer
-  const checkQuery = `
-    SELECT * FROM reviews WHERE reviewer_id = ? AND paper_id = ?
+  const reviewQuery = `
+    INSERT INTO reviews (reviewer_id, paper_id, user_comment, admin_comment, score, status)
+    VALUES (?, ?, ?, ?, ?, ?)
   `;
-  db.query(checkQuery, [reviewerId, paperId], (err, results) => {
-    if (err) return res.status(500).json({ error: 'Database error!' });
-    if (results.length > 0) {
-      return res.status(400).json({ error: 'Review already submitted!' });
+
+  db.query(reviewQuery, [reviewerId, paperId, userComment, adminComment, score, status], (err) => {
+    if (err) {
+      console.error('Error submitting review:', err);
+      return res.status(500).json({ error: 'Failed to submit review!' });
     }
 
-    // Insert review if not exists
-    const reviewQuery = `
-      INSERT INTO reviews (reviewer_id, paper_id, comments, score, status)
-      VALUES (?, ?, ?, ?, ?)
-    `;
-    db.query(reviewQuery, [reviewerId, paperId, reviewText, score, status], err => {
-      if (err) return res.status(500).json({ error: 'Failed to submit review!' });
+    db.query('UPDATE papers SET status = ? WHERE id = ?', [status, paperId], (err2) => {
+      if (err2) {
+        console.error('Error updating paper status:', err2);
+        return res.status(500).json({ error: 'Failed to update paper status!' });
+      }
 
-      db.query('UPDATE papers SET status = ? WHERE id = ?', [status, paperId], err2 => {
-        if (err2) return res.status(500).json({ error: 'Failed to update paper status!' });
-        res.json({ message: 'Review submitted and paper status updated!' });
-      });
+      res.json({ message: 'Review submitted and paper status updated!' });
     });
   });
 });
@@ -217,27 +214,49 @@ app.post('/submit-review', verifyToken, (req, res) => {
 
 app.get('/reviewer-reviewed-papers', verifyToken, (req, res) => {
   const reviewerId = req.user.id;
+
   const query = `
-    SELECT p.title, r.score, r.status, r.comments
+    SELECT 
+      p.title, 
+      r.score, 
+      r.status, 
+      r.user_comment, 
+      r.admin_comment
     FROM reviews r
     JOIN papers p ON r.paper_id = p.id
     WHERE r.reviewer_id = ?
   `;
+
   db.query(query, [reviewerId], (err, results) => {
-    if (err) return res.status(500).json({ error: 'Failed to fetch reviewed papers!' });
+    if (err) {
+      console.error('❌ SQL Error:', err.sqlMessage);
+      return res.status(500).json({ error: 'Failed to fetch reviewed papers!' });
+    }
+
     res.json(results);
   });
 });
 
 app.get('/reviewer-profile', verifyToken, (req, res) => {
   const reviewerId = req.user.id;
+
   db.query('SELECT name, email FROM reviewers WHERE id = ?', [reviewerId], (err, results) => {
-    if (err || results.length === 0)
+    if (err) {
+      console.error('❌ SQL Error:', err.sqlMessage);
+      return res.status(500).json({ error: 'Server error!' });
+    }
+
+    if (results.length === 0)
       return res.status(404).json({ error: 'Reviewer not found!' });
 
-    res.json({ name: results[0].name, email: results[0].email, role: 'Reviewer' });
+    res.json({
+      name: results[0].name,
+      email: results[0].email,
+      role: 'Reviewer'
+    });
   });
 });
+
 
 /* ==================================================
    ADMIN ROUTES

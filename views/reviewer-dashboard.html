@@ -55,10 +55,14 @@
 
   <!-- Review Modal -->
   <div id="reviewModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden z-50">
-    <div class="bg-white text-black p-6 rounded-lg w-1/3">
+    <div class="bg-white text-black p-6 rounded-lg w-full max-w-lg">
       <h2 class="text-xl font-bold mb-4">Submit Review</h2>
       <form id="reviewForm" class="space-y-4">
-        <textarea id="reviewText" placeholder="Enter your review" class="w-full p-2 border rounded" required></textarea>
+        
+        <textarea id="userComment" placeholder="Comment for Author (visible to user)" class="w-full p-2 border rounded" required></textarea>
+        
+        <textarea id="adminComment" placeholder="Admin-only Comment (confidential)" class="w-full p-2 border rounded" required></textarea>
+        
         <select id="reviewScore" class="w-full p-2 border rounded" required>
           <option value="">Select score</option>
           <option value="1">1 - Poor</option>
@@ -67,12 +71,14 @@
           <option value="4">4 - Very Good</option>
           <option value="5">5 - Excellent</option>
         </select>
+        
         <select id="reviewStatus" class="w-full p-2 border rounded" required>
           <option value="">Select status</option>
           <option value="Pending">Pending</option>
           <option value="Accepted">Accepted</option>
           <option value="Rejected">Rejected</option>
         </select>
+
         <div class="flex justify-end space-x-2">
           <button type="button" onclick="closeReviewModal()" class="px-4 py-2 bg-gray-500 text-white rounded">Cancel</button>
           <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded">Submit</button>
@@ -137,15 +143,17 @@
         list.innerHTML = '';
 
         reviews.forEach(review => {
-          list.innerHTML += `
-            <li class="bg-white bg-opacity-10 p-4 rounded">
-              <h3 class="text-lg font-bold">${review.title}</h3>
-              <p><strong>Score:</strong> ${review.score}</p>
-              <p><strong>Status:</strong> ${review.status}</p>
-              <p><strong>Comments:</strong> ${review.comments}</p>
-            </li>
-          `;
-        });
+            reviewedPapersList.innerHTML += `
+                <li class="bg-white bg-opacity-10 p-4 rounded">
+                <h3 class="text-lg font-bold">${review.title}</h3>
+                <p><strong>Score:</strong> ${review.score}</p>
+                <p><strong>Status:</strong> ${review.status}</p>
+                <p><strong>User Comment:</strong> ${review.user_comment}</p>
+                <p><strong>Admin Comment:</strong> ${review.admin_comment}</p>
+                </li>
+            `;
+            });
+
       } catch (err) {
         console.error(err);
         alert('Failed to fetch reviewed papers.');
@@ -180,11 +188,12 @@
     document.getElementById('reviewForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const reviewText = document.getElementById('reviewText').value.trim();
+      const userComment = document.getElementById('userComment').value.trim();
+      const adminComment = document.getElementById('adminComment').value.trim();
       const reviewScore = document.getElementById('reviewScore').value;
       const reviewStatus = document.getElementById('reviewStatus').value;
 
-      if (!reviewText || !reviewScore || !reviewStatus) {
+      if (!userComment || !adminComment || !reviewScore || !reviewStatus) {
         alert('Please fill out all fields!');
         return;
       }
@@ -198,7 +207,8 @@
           },
           body: JSON.stringify({
             paperId: currentPaperId,
-            reviewText,
+            userComment,
+            adminComment,
             score: reviewScore,
             status: reviewStatus
           })
