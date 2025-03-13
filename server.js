@@ -114,11 +114,29 @@ app.post('/upload-paper', verifyToken, upload.single('paper'), (req, res) => {
 
 app.get('/my-papers', verifyToken, (req, res) => {
   const userId = req.user.id;
-  db.query('SELECT * FROM papers WHERE user_id = ?', [userId], (err, results) => {
+
+  const query = `
+    SELECT 
+      p.*,
+      r.score,
+      r.status AS reviewStatus,
+      r.user_comment,
+      rv.name AS reviewerName,
+      r.created_at AS review_created_at  -- This is your review date
+    FROM papers p
+    LEFT JOIN reviews r ON p.id = r.paper_id
+    LEFT JOIN reviewers rv ON r.reviewer_id = rv.id
+    WHERE p.user_id = ?
+  `;
+
+  db.query(query, [userId], (err, results) => {
     if (err) return res.status(500).json({ error: 'Failed to fetch papers!' });
     res.json(results);
   });
 });
+
+
+
 
 app.get('/profile', verifyToken, (req, res) => {
   const userId = req.user.id;
@@ -166,16 +184,21 @@ app.post('/reviewer-login', (req, res) => {
 
 app.get('/review-papers', verifyToken, (req, res) => {
   const reviewerId = req.user.id;
+
   const query = `
-    SELECT p.* FROM papers p
+    SELECT p.*
+    FROM papers p
     JOIN paper_reviewers pr ON p.id = pr.paper_id
     WHERE pr.reviewer_id = ?
-    AND p.id NOT IN (
-      SELECT paper_id FROM reviews WHERE reviewer_id = ?
-    )
+    AND (p.status = 'Submitted' OR p.status = 'Resubmitted')
   `;
-  db.query(query, [reviewerId, reviewerId], (err, results) => {
-    if (err) return res.status(500).json({ error: 'Failed to fetch assigned papers!' });
+
+  db.query(query, [reviewerId], (err, results) => {
+    if (err) {
+      console.error('❌ Failed to fetch assigned papers:', err);
+      return res.status(500).json({ error: 'Failed to fetch assigned papers!' });
+    }
+
     res.json(results);
   });
 });
@@ -195,33 +218,37 @@ app.post('/submit-review', verifyToken, (req, res) => {
   `;
 
   db.query(reviewQuery, [reviewerId, paperId, userComment, adminComment, score, status], (err) => {
-    if (err) {
-      console.error('Error submitting review:', err);
-      return res.status(500).json({ error: 'Failed to submit review!' });
-    }
+    if (err) return res.status(500).json({ error: 'Failed to submit review!' });
 
     db.query('UPDATE papers SET status = ? WHERE id = ?', [status, paperId], (err2) => {
-      if (err2) {
-        console.error('Error updating paper status:', err2);
-        return res.status(500).json({ error: 'Failed to update paper status!' });
-      }
-
+      if (err2) return res.status(500).json({ error: 'Failed to update paper status!' });
       res.json({ message: 'Review submitted and paper status updated!' });
     });
   });
 });
 
+app.get('/reviewer-profile', verifyToken, (req, res) => {
+  const reviewerId = req.user.id;
+  db.query('SELECT name, email FROM reviewers WHERE id = ?', [reviewerId], (err, results) => {
+    if (err || results.length === 0)
+      return res.status(404).json({ error: 'Reviewer not found!' });
+
+    res.json({ name: results[0].name, email: results[0].email, role: 'Reviewer' });
+  });
+});
 
 app.get('/reviewer-reviewed-papers', verifyToken, (req, res) => {
   const reviewerId = req.user.id;
 
   const query = `
-    SELECT 
-      p.title, 
-      r.score, 
-      r.status, 
-      r.user_comment, 
-      r.admin_comment
+    SELECT
+      p.title,
+      p.file_path,
+      r.score,
+      r.status,
+      r.user_comment,
+      r.admin_comment,
+      r.created_at AS review_created_at
     FROM reviews r
     JOIN papers p ON r.paper_id = p.id
     WHERE r.reviewer_id = ?
@@ -229,31 +256,11 @@ app.get('/reviewer-reviewed-papers', verifyToken, (req, res) => {
 
   db.query(query, [reviewerId], (err, results) => {
     if (err) {
-      console.error('❌ SQL Error:', err.sqlMessage);
+      console.error('❌ Failed to fetch reviewed papers:', err);
       return res.status(500).json({ error: 'Failed to fetch reviewed papers!' });
     }
 
     res.json(results);
-  });
-});
-
-app.get('/reviewer-profile', verifyToken, (req, res) => {
-  const reviewerId = req.user.id;
-
-  db.query('SELECT name, email FROM reviewers WHERE id = ?', [reviewerId], (err, results) => {
-    if (err) {
-      console.error('❌ SQL Error:', err.sqlMessage);
-      return res.status(500).json({ error: 'Server error!' });
-    }
-
-    if (results.length === 0)
-      return res.status(404).json({ error: 'Reviewer not found!' });
-
-    res.json({
-      name: results[0].name,
-      email: results[0].email,
-      role: 'Reviewer'
-    });
   });
 });
 
@@ -301,10 +308,99 @@ app.get('/admin-profile', verifyAdmin, (req, res) => {
 });
 
 app.get('/admin-papers', verifyAdmin, (req, res) => {
-  db.query('SELECT * FROM papers', (err, results) => {
-    if (err) return res.status(500).json({ error: 'Failed to fetch papers!' });
+  const query = `
+    SELECT p.*
+    FROM papers p
+    LEFT JOIN paper_reviewers pr ON p.id = pr.paper_id
+    WHERE pr.paper_id IS NULL
+  `;
+
+  db.query(query, (err, results) => {
+    if (err) return res.status(500).json({ error: 'Failed to fetch unassigned papers!' });
     res.json(results);
-    console.log(res);
+  });
+});
+
+app.get('/admin-assigned-papers', verifyAdmin, (req, res) => {
+  const query = `
+    SELECT
+      p.id,
+      p.title,
+      p.status,
+      p.file_path,
+      pr.assigned_on,
+      GROUP_CONCAT(DISTINCT r.name) AS reviewerNames,
+      rev.id AS reviewId,
+      rev.score,
+      rev.status AS reviewStatus,
+      rev.user_comment
+    FROM papers p
+    JOIN paper_reviewers pr ON p.id = pr.paper_id
+    JOIN reviewers r ON pr.reviewer_id = r.id
+    LEFT JOIN reviews rev ON rev.paper_id = p.id AND rev.reviewer_id = r.id
+    GROUP BY p.id, rev.id, pr.assigned_on
+  `;
+
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Failed to fetch assigned papers!' });
+    }
+    res.json(results);
+  });
+});
+
+
+
+
+app.get('/admin-reviewed-papers', verifyAdmin, (req, res) => {
+  const query = `
+    SELECT
+      r.id AS reviewId,
+      p.title,
+      p.file_path,
+      r.score,
+      r.status,
+      r.user_comment,
+      r.admin_comment,
+      rv.name AS reviewerName
+    FROM reviews r
+    JOIN papers p ON r.paper_id = p.id
+    JOIN reviewers rv ON r.reviewer_id = rv.id
+  `;
+
+  db.query(query, (err, results) => {
+    if (err) return res.status(500).json({ error: 'Failed to fetch reviewed papers!' });
+    res.json(results);
+  });
+});
+
+app.post('/admin-assign-reviewer', verifyAdmin, (req, res) => {
+  const { paperId, reviewerId } = req.body;
+  if (!paperId || !reviewerId)
+    return res.status(400).json({ error: 'Both paperId and reviewerId are required!' });
+
+  db.query('INSERT INTO paper_reviewers (paper_id, reviewer_id, assigned_on ) VALUES (?, ?)',
+    [paperId, reviewerId], (err) => {
+      if (err) return res.status(500).json({ error: 'Failed to assign reviewer!' });
+      res.json({ message: 'Reviewer assigned successfully!' });
+    });
+});
+
+app.put('/admin-overwrite-review', verifyAdmin, (req, res) => {
+  const { reviewId, score, status, user_comment } = req.body;
+
+  if (!reviewId || !score || !status || !user_comment) {
+    return res.status(400).json({ error: 'All fields are required!' });
+  }
+
+  db.query(`
+    UPDATE reviews
+    SET score = ?, status = ?, user_comment = ?
+    WHERE id = ?
+  `, [score, status, user_comment, reviewId], (err) => {
+    if (err) return res.status(500).json({ error: 'Failed to overwrite review!' });
+    res.json({ message: 'Review successfully overwritten!' });
   });
 });
 
@@ -312,21 +408,145 @@ app.get('/admin-reviewers', verifyAdmin, (req, res) => {
   db.query('SELECT id, name, email FROM reviewers', (err, results) => {
     if (err) return res.status(500).json({ error: 'Failed to fetch reviewers!' });
     res.json(results);
-    console.log(res);
   });
 });
 
-app.post('/admin-assign-reviewer', verifyAdmin, (req, res) => {
-  const { paperId, reviewerId } = req.body;
-  if (!paperId || !reviewerId)
-    return res.status(400).json({ error: 'Paper ID and Reviewer ID are required!' });
+/* ==================================================
+   USER REVIEWED & UNREVIEWED PAPERS ROUTES
+================================================== */
 
-  db.query('INSERT INTO paper_reviewers (paper_id, reviewer_id) VALUES (?, ?)',
-    [paperId, reviewerId], err => {
-      if (err) return res.status(500).json({ error: 'Failed to assign reviewer!' });
-      res.json({ message: 'Reviewer assigned successfully!' });
-    });
+// ✅ Reviewed Papers for User
+app.get('/user-reviewed-papers', verifyToken, (req, res) => {
+  const userId = req.user.id;
+
+  const query = `
+    SELECT
+      p.id,
+      p.title,
+      p.file_path,
+      r.score,
+      r.status,
+      r.user_comment,
+      r.admin_comment,
+      rv.name AS reviewerName
+    FROM papers p
+    JOIN reviews r ON p.id = r.paper_id
+    JOIN reviewers rv ON r.reviewer_id = rv.id
+    WHERE p.user_id = ?
+  `;
+
+  db.query(query, [userId], (err, results) => {
+    if (err) {
+      console.error('Error fetching reviewed papers:', err);
+      return res.status(500).json({ error: 'Failed to fetch reviewed papers!' });
+    }
+
+    res.json(results);
+  });
 });
+
+// ✅ Unreviewed Papers for User
+app.get('/user-unreviewed-papers', verifyToken, (req, res) => {
+  const userId = req.user.id;
+
+  const query = `
+    SELECT
+      p.id,
+      p.title,
+      p.file_path,
+      p.status
+    FROM papers p
+    WHERE p.user_id = ?
+    AND p.id NOT IN (
+      SELECT paper_id FROM reviews
+    )
+  `;
+
+  db.query(query, [userId], (err, results) => {
+    if (err) {
+      console.error('Error fetching unreviewed papers:', err);
+      return res.status(500).json({ error: 'Failed to fetch unreviewed papers!' });
+    }
+
+    res.json(results);
+  });
+});
+
+app.put('/update-paper/:paperId', verifyToken, upload.single('paper'), (req, res) => {
+  const userId = req.user.id;
+  const paperId = req.params.paperId;
+  const { description, title } = req.body;
+
+  console.log("➡️ Incoming request...");
+  console.log("Paper ID:", paperId);
+  console.log("User ID:", userId);
+  console.log("Title:", title);
+  console.log("Description:", description);
+  console.log("File object:", req.file);
+
+  if (!req.file) {
+    console.log("❌ No file uploaded!");
+    return res.status(400).json({ error: 'No file uploaded!' });
+  }
+
+  const filePath = req.file.path;
+
+  // ✅ Check if the paper was rejected AND find the review date
+  const checkQuery = `
+    SELECT p.*, r.created_at AS review_created_at
+    FROM papers p
+    JOIN reviews r ON p.id = r.paper_id
+    WHERE p.id = ? AND p.user_id = ? AND p.status = 'Rejected'
+    ORDER BY r.created_at DESC
+    LIMIT 1
+  `;
+
+  db.query(checkQuery, [paperId, userId], (err, results) => {
+    if (err) {
+      console.error('❌ Error fetching paper:', err);
+      return res.status(500).json({ error: 'Server error!' });
+    }
+
+    console.log("✅ Paper check result:", results);
+
+    if (results.length === 0) {
+      console.log("❌ No matching paper found or not rejected.");
+      return res.status(403).json({ error: 'Paper not found or cannot be updated!' });
+    }
+
+    const reviewCreatedAt = new Date(results[0].review_created_at);
+    const currentDate = new Date();
+    const diffTime = currentDate - reviewCreatedAt;
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+    console.log(`📅 Review date: ${reviewCreatedAt}`);
+    console.log(`📅 Current date: ${currentDate}`);
+    console.log(`⏳ Days since review: ${diffDays}`);
+
+    if (diffDays > 7) {
+      console.log("❌ Update window expired.");
+      return res.status(403).json({ error: 'Update window expired! You can only update within 7 days after review.' });
+    }
+
+    const updateQuery = `
+      UPDATE papers 
+      SET title = ?, description = ?, file_path = ?, status = 'Submitted', created_at = NOW()
+      WHERE id = ? AND user_id = ?
+    `;
+
+    db.query(updateQuery, [title, description, filePath, paperId, userId], (updateErr) => {
+      if (updateErr) {
+        console.error('❌ Error updating paper:', updateErr);
+        return res.status(500).json({ error: 'Failed to update paper!' });
+      }
+
+      console.log("✅ Paper updated and resubmitted successfully!");
+      res.json({ message: 'Paper updated and resubmitted successfully!' });
+    });
+  });
+});
+
+
 
 /* ==================================================
    MIDDLEWARE

@@ -6,16 +6,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>User Dashboard | Conference Review System</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+  <style>
+    body {
+      background: url('images/user_dash_bg.jpg') no-repeat center center fixed;
+      background-size: cover;
+    }
+
+    /* Top-right greeting style */
+    #userGreeting {
+      transition: opacity 0.3s ease;
+      opacity: 0;
+    }
+
+    #userGreeting.show {
+      opacity: 1;
+    }
+  </style>
 </head>
 
-<body class="bg-gradient-to-r from-purple-800 via-indigo-900 to-gray-900 min-h-screen text-white flex">
+<body class="min-h-screen text-white flex">
 
   <!-- Sidebar -->
-  <aside class="w-64 bg-gray-800 text-gray-200 flex flex-col p-6 space-y-10">
+  <aside class="w-64 bg-gray-800 text-gray-200 flex flex-col p-6 space-y-10 fixed top-0 left-0 h-screen">
     <div class="text-2xl font-bold text-white mb-10">Dashboard</div>
     <nav class="flex flex-col space-y-4">
-      <button onclick="showSection('myPapers')" class="text-left hover:bg-gray-700 p-3 rounded transition">My Papers</button>
-      <button onclick="showSection('addPaper')" class="text-left hover:bg-gray-700 p-3 rounded transition">Add New Paper</button>
+      <button onclick="showSection('reviewed')" class="text-left hover:bg-gray-700 p-3 rounded transition">Reviewed Papers</button>
+      <button onclick="showSection('unreviewed')" class="text-left hover:bg-gray-700 p-3 rounded transition">Unreviewed Papers</button>
+      <button onclick="showSection('addPaper')" class="text-left hover:bg-gray-700 p-3 rounded transition">Submit New Paper</button>
       <button onclick="showSection('myProfile')" class="text-left hover:bg-gray-700 p-3 rounded transition">My Profile</button>
     </nav>
 
@@ -25,16 +42,27 @@
     </div>
   </aside>
 
-  <!-- Main Content -->
-  <main class="flex-1 p-10 space-y-8">
+  <!-- Top-right Greeting -->
+  <div id="userGreeting" class="fixed top-4 right-6 text-white text-lg font-semibold hidden z-50">
+    Hi, <span id="userName">User</span>
+  </div>
 
-    <!-- My Papers Section -->
-    <section id="myPapersSection">
-      <h1 class="text-3xl font-bold mb-6">Your Submitted Papers</h1>
-      <div id="papersContainer" class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md">
-        <ul id="papersList" class="space-y-4">
-          <!-- Papers will load here -->
-        </ul>
+  <!-- Main Content -->
+  <main class="flex-1 ml-64 p-10 space-y-8 overflow-y-auto h-screen">
+
+    <!-- Reviewed Papers Section -->
+    <section id="reviewedSection">
+      <h1 class="text-3xl font-bold mb-6">Reviewed Papers</h1>
+      <div id="reviewedPapersContainer" class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md">
+        <ul id="reviewedPapersList" class="space-y-4"></ul>
+      </div>
+    </section>
+
+    <!-- Unreviewed Papers Section -->
+    <section id="unreviewedSection" class="hidden">
+      <h1 class="text-3xl font-bold mb-6">Unreviewed Papers</h1>
+      <div id="unreviewedPapersContainer" class="bg-white bg-opacity-10 p-6 rounded-lg shadow-md">
+        <ul id="unreviewedPapersList" class="space-y-4"></ul>
       </div>
     </section>
 
@@ -64,12 +92,40 @@
 
   </main>
 
+  <!-- Update Paper Modal -->
+  <div id="updatePaperModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden z-50">
+    <div class="bg-white text-black p-6 rounded-lg w-1/3">
+      <h2 class="text-xl font-bold mb-4">Update Paper</h2>
+      <form id="updatePaperForm" class="space-y-4">
+        <input type="hidden" id="updatePaperId" />
+
+        <label>
+          <span class="text-gray-700">Paper Title</span>
+          <input type="text" id="updateTitle" class="w-full p-2 border rounded" required />
+        </label>
+
+        <label>
+          <span class="text-gray-700">Description</span>
+          <textarea id="updateDescription" class="w-full p-2 border rounded" required></textarea>
+        </label>
+
+        <label>
+          <span class="text-gray-700">Upload New Paper (.pdf)</span>
+          <input type="file" id="updatePaperFile" accept=".pdf" required class="w-full p-2 border rounded" />
+        </label>
+
+        <div class="flex justify-end space-x-2">
+          <button type="button" onclick="closeUpdateModal()" class="px-4 py-2 bg-gray-500 text-white rounded">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded">Resubmit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
   <script>
     const userToken = localStorage.getItem('token');
-
-    const paperForm = document.getElementById('paperForm');
-    const papersList = document.getElementById('papersList');
-    const uploadMessage = document.getElementById('uploadMessage');
+    let currentUpdatePaperId = null;
 
     if (!userToken) {
       alert('You are not logged in! Redirecting...');
@@ -77,45 +133,93 @@
     }
 
     function showSection(section) {
-      document.getElementById('myPapersSection').classList.add('hidden');
+      document.getElementById('reviewedSection').classList.add('hidden');
+      document.getElementById('unreviewedSection').classList.add('hidden');
       document.getElementById('addPaperSection').classList.add('hidden');
       document.getElementById('myProfileSection').classList.add('hidden');
 
-      if (section === 'myPapers') {
-        document.getElementById('myPapersSection').classList.remove('hidden');
+      if (section === 'reviewed') {
+        fetchReviewedPapers();
+        document.getElementById('reviewedSection').classList.remove('hidden');
+      } else if (section === 'unreviewed') {
+        fetchUnreviewedPapers();
+        document.getElementById('unreviewedSection').classList.remove('hidden');
       } else if (section === 'addPaper') {
         document.getElementById('addPaperSection').classList.remove('hidden');
       } else if (section === 'myProfile') {
-        document.getElementById('myProfileSection').classList.remove('hidden');
         fetchUserProfile();
+        document.getElementById('myProfileSection').classList.remove('hidden');
       }
     }
 
-    async function fetchPapers() {
+    async function fetchUserProfile() {
+      const res = await fetch('http://localhost:3000/profile', {
+        headers: { 'Authorization': `Bearer ${userToken}` }
+      });
+
+      const profile = await res.json();
+      document.getElementById('profileName').textContent = profile.username;
+      document.getElementById('profileEmail').textContent = profile.email;
+
+      // Show greeting with user name
+      const greeting = document.getElementById('userGreeting');
+      document.getElementById('userName').textContent = profile.username;
+      greeting.classList.remove('hidden');
+      setTimeout(() => greeting.classList.add('show'), 10);
+    }
+
+    async function fetchReviewedPapers() {
       try {
         const res = await fetch('http://localhost:3000/my-papers', {
           headers: { 'Authorization': `Bearer ${userToken}` }
         });
         const papers = await res.json();
-        papersList.innerHTML = '';
+        const list = document.getElementById('reviewedPapersList');
+        list.innerHTML = '';
 
-        if (papers.length === 0) {
-          papersList.innerHTML = '<li class="text-gray-400">No papers submitted yet.</li>';
+        const reviewedPapers = papers.filter(p => p.status !== 'Submitted' && p.status !== 'Resubmitted');
+
+        if (reviewedPapers.length === 0) {
+          list.innerHTML = '<li class="text-gray-400">No reviewed papers yet.</li>';
           return;
         }
 
-        papers.forEach(paper => {
-          const fileName = paper.file_path.split('/').pop();
-          const createdDate = new Date(paper.created_at).toLocaleDateString();
-          let colorClass = paper.status === 'Accepted' ? 'border-green-400' :
-                           paper.status === 'Rejected' ? 'border-red-400' : 'border-yellow-400';
+        reviewedPapers.forEach(paper => {
+          const fileUrl = `http://localhost:3000/${paper.file_path}`;
+          const colorClass = paper.status === 'Accepted' ? 'border-green-400' : 'border-red-400';
 
-          papersList.innerHTML += `
+          let daysLeftText = '';
+          let showUpdateButton = '';
+
+          if (paper.status === 'Rejected' && paper.review_created_at) {
+            const reviewDate = new Date(paper.review_created_at);
+            const currentDate = new Date();
+            const diffTime = currentDate - reviewDate;
+            const diffDays = Math.ceil(7 - diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays > 0) {
+              daysLeftText = `<p class="text-xs text-red-300">Days left to update: ${diffDays}</p>`;
+              showUpdateButton = `
+                <button onclick="openUpdateModal(${paper.id}, '${paper.title}', \`${paper.description || ''}\`)" 
+                  class="mt-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 rounded">
+                  Update Paper
+                </button>`;
+            } else {
+              daysLeftText = `<p class="text-xs text-red-500">Update window closed</p>`;
+            }
+          }
+
+          list.innerHTML += `
             <li class="bg-white bg-opacity-10 p-4 rounded border-l-8 ${colorClass} relative">
-              <h3 class="text-lg font-bold mb-2">${paper.title}</h3>
-              <p class="text-sm mb-2 text-yellow-400">Status: ${paper.status}</p>
-              <a href="http://localhost:3000/uploads/${fileName}" target="_blank" class="text-blue-300 underline mt-2 inline-block">Download Paper</a>
-              <p class="text-xs text-gray-400 absolute bottom-2 right-4">Submitted: ${createdDate}</p>
+              <h3 class="text-lg font-bold mb-2">
+                <a href="${fileUrl}" download target="_blank" class="hover:underline text-blue-300">${paper.title}</a>
+              </h3>
+              <p class="text-sm mb-1 text-yellow-400">Status: ${paper.status}</p>
+              <p class="text-sm">Reviewer: ${paper.reviewerName || 'Not Available'}</p>
+              <p class="text-sm">Score: ${paper.score || 'N/A'}</p>
+              <p class="text-sm">Reviewer Comment: ${paper.user_comment || 'N/A'}</p>
+              ${daysLeftText}
+              ${showUpdateButton}
             </li>
           `;
         });
@@ -124,31 +228,75 @@
       }
     }
 
-    function fetchUserProfile() {
-      fetch('http://localhost:3000/profile', {
-        headers: { 'Authorization': `Bearer ${userToken}` }
-      })
-      .then(res => res.json())
-      .then(profile => {
-        document.getElementById('profileName').textContent = profile.username;
-        document.getElementById('profileEmail').textContent = profile.email;
-      });
+    async function fetchUnreviewedPapers() {
+      try {
+        const res = await fetch('http://localhost:3000/my-papers', {
+          headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+        const papers = await res.json();
+        const list = document.getElementById('unreviewedPapersList');
+        list.innerHTML = '';
+
+        const unreviewedPapers = papers.filter(p => p.status === 'Submitted' || p.status === 'Resubmitted');
+
+        if (unreviewedPapers.length === 0) {
+          list.innerHTML = '<li class="text-gray-400">No unreviewed papers.</li>';
+          return;
+        }
+
+        unreviewedPapers.forEach(paper => {
+          const fileUrl = `http://localhost:3000/${paper.file_path}`;
+
+          list.innerHTML += `
+            <li class="bg-white bg-opacity-10 p-4 rounded border-l-8 border-yellow-400 relative">
+              <h3 class="text-lg font-bold mb-2">
+                <a href="${fileUrl}" download target="_blank" class="hover:underline text-blue-300">${paper.title}</a>
+              </h3>
+              <p class="text-sm mb-1 text-yellow-400">Status: ${paper.status}</p>
+              <p class="text-xs text-gray-400">Waiting for review...</p>
+            </li>
+          `;
+        });
+      } catch (err) {
+        console.error(err);
+      }
     }
 
-    paperForm.addEventListener('submit', async (e) => {
+    function openUpdateModal(paperId, title, description) {
+      currentUpdatePaperId = paperId;
+      document.getElementById('updatePaperId').value = paperId;
+      document.getElementById('updateTitle').value = title;
+      document.getElementById('updateDescription').value = description;
+
+      document.getElementById('updatePaperModal').classList.remove('hidden');
+    }
+
+    function closeUpdateModal() {
+      currentUpdatePaperId = null;
+      document.getElementById('updatePaperModal').classList.add('hidden');
+      document.getElementById('updatePaperForm').reset();
+    }
+
+    document.getElementById('updatePaperForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const title = document.getElementById('title').value;
-      const abstract = document.getElementById('abstract').value;
-      const paperFile = document.getElementById('paperFile').files[0];
+      const paperId = document.getElementById('updatePaperId').value;
+      const title = document.getElementById('updateTitle').value;
+      const description = document.getElementById('updateDescription').value;
+      const paperFile = document.getElementById('updatePaperFile').files[0];
+
+      if (!paperFile) {
+        alert('Please upload a PDF file!');
+        return;
+      }
 
       const formData = new FormData();
       formData.append('title', title);
-      formData.append('description', abstract);
+      formData.append('description', description);
       formData.append('paper', paperFile);
 
-      const res = await fetch('http://localhost:3000/upload-paper', {
-        method: 'POST',
+      const res = await fetch(`http://localhost:3000/update-paper/${paperId}`, {
+        method: 'PUT',
         headers: { 'Authorization': `Bearer ${userToken}` },
         body: formData
       });
@@ -156,14 +304,13 @@
       const result = await res.json();
 
       if (res.ok) {
-        uploadMessage.textContent = '✅ Paper uploaded successfully!';
-        uploadMessage.classList.add('text-green-400');
-        paperForm.reset();
-        fetchPapers();
-        showSection('myPapers');
+        alert('✅ Paper updated successfully!');
+        closeUpdateModal();
+        fetchReviewedPapers();
+        fetchUnreviewedPapers();
+        showSection('unreviewed');
       } else {
-        uploadMessage.textContent = result.error;
-        uploadMessage.classList.add('text-red-400');
+        alert(result.error || '❌ Failed to update paper!');
       }
     });
 
@@ -173,10 +320,10 @@
     });
 
     window.addEventListener('DOMContentLoaded', () => {
-      fetchPapers();
-      showSection('myPapers');
+      showSection('reviewed');
       fetchUserProfile();
     });
   </script>
 </body>
+
 </html>

@@ -1,20 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Reviewer Dashboard | Conference Review System</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+  <style>
+    body {
+      background: url('images/reviewer_dash_bg.jpg') no-repeat center center fixed;
+      background-size: cover;
+    }
+
+    
+  </style>
 </head>
-<body class="bg-gradient-to-r from-green-800 via-blue-900 to-gray-900 min-h-screen text-white flex">
+
+<body class="text-white flex min-h-screen">
 
   <!-- Sidebar -->
-  <aside class="w-64 bg-gray-800 text-gray-200 flex flex-col p-6 space-y-10">
+  <aside class="fixed top-0 left-0 w-64 h-full bg-gray-800 text-gray-200 flex flex-col p-6 space-y-10 z-40">
     <div class="text-2xl font-bold text-white mb-10">Dashboard</div>
     <nav class="flex flex-col space-y-4">
-      <button onclick="showSection('assignedPapers')" class="text-left hover:bg-gray-700 p-3 rounded transition">Assigned Papers</button>
-      <button onclick="showSection('reviewedPapers')" class="text-left hover:bg-gray-700 p-3 rounded transition">Reviewed Papers</button>
-      <button onclick="showSection('profile')" class="text-left hover:bg-gray-700 p-3 rounded transition">My Profile</button>
+      <button onclick="showSection('assignedPapers')"
+        class="text-left hover:bg-gray-700 p-3 rounded transition">Assigned Papers</button>
+      <button onclick="showSection('reviewedPapers')"
+        class="text-left hover:bg-gray-700 p-3 rounded transition">Reviewed Papers</button>
+      <button onclick="showSection('profile')"
+        class="text-left hover:bg-gray-700 p-3 rounded transition">My Profile</button>
     </nav>
 
     <div class="mt-auto">
@@ -22,8 +35,14 @@
     </div>
   </aside>
 
+  <!-- Top-right Greeting -->
+  <div id="topRightGreeting"
+    class="fixed top-4 right-6 text-white text-lg font-semibold z-50 hidden">
+    Hi, <span id="reviewerGreetingName"></span>
+  </div>
+
   <!-- Main Content -->
-  <main class="flex-1 p-10 space-y-8">
+  <main class="flex-1 p-10 space-y-8 ml-64">
 
     <!-- Assigned Papers Section -->
     <section id="assignedPapersSection">
@@ -58,11 +77,10 @@
     <div class="bg-white text-black p-6 rounded-lg w-full max-w-lg">
       <h2 class="text-xl font-bold mb-4">Submit Review</h2>
       <form id="reviewForm" class="space-y-4">
-        
-        <textarea id="userComment" placeholder="Comment for Author (visible to user)" class="w-full p-2 border rounded" required></textarea>
-        
-        <textarea id="adminComment" placeholder="Admin-only Comment (confidential)" class="w-full p-2 border rounded" required></textarea>
-        
+        <textarea id="userComment" placeholder="Comment for Author (visible to user)"
+          class="w-full p-2 border rounded" required></textarea>
+        <textarea id="adminComment" placeholder="Admin-only Comment (confidential)"
+          class="w-full p-2 border rounded" required></textarea>
         <select id="reviewScore" class="w-full p-2 border rounded" required>
           <option value="">Select score</option>
           <option value="1">1 - Poor</option>
@@ -71,7 +89,6 @@
           <option value="4">4 - Very Good</option>
           <option value="5">5 - Excellent</option>
         </select>
-        
         <select id="reviewStatus" class="w-full p-2 border rounded" required>
           <option value="">Select status</option>
           <option value="Pending">Pending</option>
@@ -80,13 +97,15 @@
         </select>
 
         <div class="flex justify-end space-x-2">
-          <button type="button" onclick="closeReviewModal()" class="px-4 py-2 bg-gray-500 text-white rounded">Cancel</button>
+          <button type="button" onclick="closeReviewModal()"
+            class="px-4 py-2 bg-gray-500 text-white rounded">Cancel</button>
           <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded">Submit</button>
         </div>
       </form>
     </div>
   </div>
 
+  <!-- Scripts -->
   <script>
     const reviewerToken = localStorage.getItem('reviewerToken');
     let currentPaperId = null;
@@ -119,10 +138,15 @@
 
         papers.forEach(paper => {
           const fileName = paper.file_path.split('/').pop();
+          const fileUrl = `http://localhost:3000/uploads/${fileName}`;
+
           list.innerHTML += `
             <li class="bg-white bg-opacity-10 p-4 rounded">
-              <h3 class="text-lg font-bold">${paper.title}</h3>
-              <a href="http://localhost:3000/uploads/${fileName}" target="_blank" class="text-blue-300 underline block">Download Paper</a>
+              <h3 class="text-lg font-bold">
+                <a href="${fileUrl}" download target="_blank" class="text-blue-300 hover:underline">
+                  ${paper.title}
+                </a>
+              </h3>
               <button onclick="openReviewModal(${paper.id})" class="mt-2 bg-green-500 hover:bg-green-600 py-1 px-4 rounded">Review</button>
             </li>
           `;
@@ -134,31 +158,47 @@
     }
 
     async function fetchReviewedPapers() {
-      try {
-        const res = await fetch('http://localhost:3000/reviewer-reviewed-papers', {
-          headers: { 'Authorization': `Bearer ${reviewerToken}` }
-        });
-        const reviews = await res.json();
-        const list = document.getElementById('reviewedPapersList');
-        list.innerHTML = '';
+  try {
+    const res = await fetch('http://localhost:3000/reviewer-reviewed-papers', {
+      headers: { 'Authorization': `Bearer ${reviewerToken}` }
+    });
+    const reviews = await res.json();
+    const list = document.getElementById('reviewedPapersList');
+    list.innerHTML = '';
 
-        reviews.forEach(review => {
-            reviewedPapersList.innerHTML += `
-                <li class="bg-white bg-opacity-10 p-4 rounded">
-                <h3 class="text-lg font-bold">${review.title}</h3>
-                <p><strong>Score:</strong> ${review.score}</p>
-                <p><strong>Status:</strong> ${review.status}</p>
-                <p><strong>User Comment:</strong> ${review.user_comment}</p>
-                <p><strong>Admin Comment:</strong> ${review.admin_comment}</p>
-                </li>
-            `;
-            });
+    reviews.forEach(review => {
+      const fileName = review.file_path.split('/').pop();
+      const fileUrl = `http://localhost:3000/${review.file_path}`;
 
-      } catch (err) {
-        console.error(err);
-        alert('Failed to fetch reviewed papers.');
-      }
-    }
+      // Format review date (assuming ISO string from DB)
+      const reviewDate = new Date(review.review_created_at).toLocaleDateString('en-GB', {
+        year: 'numeric', month: 'short', day: 'numeric'
+      });
+
+      list.innerHTML += `
+        <li class="relative bg-white bg-opacity-10 p-4 rounded border-l-4 border-blue-400 shadow-md">
+          <h3 class="text-lg font-bold">
+            <a href="${fileUrl}" download target="_blank" class="text-blue-300 hover:underline">
+              ${review.title}
+            </a>
+          </h3>
+          <p><strong>Score:</strong> ${review.score}</p>
+          <p><strong>Status:</strong> ${review.status}</p>
+          <p><strong>User Comment:</strong> ${review.user_comment}</p>
+          <p><strong>Admin Comment:</strong> ${review.admin_comment}</p>
+
+          <div class="absolute bottom-2 right-4 text-xs text-gray-300">
+            Submitted on: ${reviewDate}
+          </div>
+        </li>
+      `;
+    });
+  } catch (err) {
+    console.error(err);
+    alert('Failed to fetch reviewed papers.');
+  }
+}
+
 
     async function fetchReviewerProfile() {
       try {
@@ -169,6 +209,12 @@
 
         document.getElementById('reviewerName').innerText = reviewer.name;
         document.getElementById('reviewerEmail').innerText = reviewer.email;
+
+        // Show greeting
+        const greetingEl = document.getElementById('topRightGreeting');
+        const nameSpan = document.getElementById('reviewerGreetingName');
+        nameSpan.innerText = reviewer.name;
+        greetingEl.classList.remove('hidden');
       } catch (err) {
         console.error(err);
         alert('Failed to fetch profile.');
@@ -236,8 +282,10 @@
 
     window.addEventListener('DOMContentLoaded', () => {
       showSection('assignedPapers');
+      fetchReviewerProfile();
     });
   </script>
 
 </body>
+
 </html>
