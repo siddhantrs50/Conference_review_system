@@ -19,20 +19,25 @@ app.use('/uploads', express.static('uploads'));
 const SECRET_KEY = 'supersecretkey';
 
 // ✅ MySQL connection
-const db = mysql.createConnection({
+const db = mysql.createPool({
   host: 'localhost',
   user: 'root',
   password: '13108375007',
-  database: 'mydatabase'
+  database: 'mydatabase',
+  waitForConnections: true,
+  connectionLimit: 10,  // Number of connections (tweakable)
+  queueLimit: 0         // Unlimited queue
 });
 
-db.connect(err => {
+db.getConnection((err, connection) => {
   if (err) {
     console.error('❌ MySQL connection failed:', err);
     return;
   }
   console.log('✅ Connected to MySQL Database');
+  connection.release(); // ✅ Release connection back to pool
 });
+
 
 // ✅ Multer file upload setup
 const storage = multer.diskStorage({
@@ -73,6 +78,7 @@ app.post('/register', async (req, res) => {
     db.query('INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
       [name, email, hashedPassword],
       err => {
+        console.log(err);
         if (err) return res.status(500).json({ error: 'User registration failed!' });
         res.json({ message: 'User registered successfully!' });
       });
@@ -122,18 +128,39 @@ app.get('/my-papers', verifyToken, (req, res) => {
       r.status AS reviewStatus,
       r.user_comment,
       rv.name AS reviewerName,
-      r.created_at AS review_created_at  -- This is your review date
+      r.created_at AS review_created_at
     FROM papers p
-    LEFT JOIN reviews r ON p.id = r.paper_id
+    LEFT JOIN reviews r ON r.id = (
+      SELECT rev_inner.id
+      FROM reviews rev_inner
+      WHERE rev_inner.paper_id = p.id
+      ORDER BY rev_inner.created_at DESC
+      LIMIT 1
+    )
     LEFT JOIN reviewers rv ON r.reviewer_id = rv.id
     WHERE p.user_id = ?
+    ORDER BY p.created_at DESC
   `;
 
   db.query(query, [userId], (err, results) => {
-    if (err) return res.status(500).json({ error: 'Failed to fetch papers!' });
-    res.json(results);
+    if (err) {
+      console.error('❌ Error in /my-papers:', err);
+      return res.status(500).json({ error: 'Failed to fetch papers!' });
+    }
+
+    // Convert review_created_at to ISO string if exists
+    const formattedResults = results.map(row => ({
+      ...row,
+      review_created_at: row.review_created_at
+        ? new Date(row.review_created_at).toISOString()
+        : null
+    }));
+
+    res.json(formattedResults);
   });
 });
+
+
 
 
 
@@ -328,27 +355,66 @@ app.get('/admin-assigned-papers', verifyAdmin, (req, res) => {
       p.title,
       p.status,
       p.file_path,
-      pr.assigned_on,
-      GROUP_CONCAT(DISTINCT r.name) AS reviewerNames,
-      rev.id AS reviewId,
-      rev.score,
-      rev.status AS reviewStatus,
-      rev.user_comment
+
+      (
+        SELECT MAX(pr_inner.assigned_on)
+        FROM paper_reviewers pr_inner
+        WHERE pr_inner.paper_id = p.id
+      ) AS assigned_on,
+
+      (
+        SELECT GROUP_CONCAT(DISTINCT r.name)
+        FROM paper_reviewers pr2
+        JOIN reviewers r ON pr2.reviewer_id = r.id
+        WHERE pr2.paper_id = p.id
+      ) AS reviewerNames,
+
+      (
+        SELECT rev_inner.id
+        FROM reviews rev_inner
+        WHERE rev_inner.paper_id = p.id
+        ORDER BY rev_inner.created_at DESC
+        LIMIT 1
+      ) AS reviewId,
+
+      (
+        SELECT rev_inner.score
+        FROM reviews rev_inner
+        WHERE rev_inner.paper_id = p.id
+        ORDER BY rev_inner.created_at DESC
+        LIMIT 1
+      ) AS score,
+
+      (
+        SELECT rev_inner.status
+        FROM reviews rev_inner
+        WHERE rev_inner.paper_id = p.id
+        ORDER BY rev_inner.created_at DESC
+        LIMIT 1
+      ) AS reviewStatus,
+
+      (
+        SELECT rev_inner.user_comment
+        FROM reviews rev_inner
+        WHERE rev_inner.paper_id = p.id
+        ORDER BY rev_inner.created_at DESC
+        LIMIT 1
+      ) AS user_comment
+
     FROM papers p
-    JOIN paper_reviewers pr ON p.id = pr.paper_id
-    JOIN reviewers r ON pr.reviewer_id = r.id
-    LEFT JOIN reviews rev ON rev.paper_id = p.id AND rev.reviewer_id = r.id
-    GROUP BY p.id, rev.id, pr.assigned_on
   `;
 
   db.query(query, (err, results) => {
     if (err) {
-      console.error(err);
+      console.error('❌ Error in admin-assigned-papers:', err);
       return res.status(500).json({ error: 'Failed to fetch assigned papers!' });
     }
+
+    console.log('✅ admin-assigned-papers results:', results);
     res.json(results);
   });
 });
+
 
 
 
@@ -380,8 +446,9 @@ app.post('/admin-assign-reviewer', verifyAdmin, (req, res) => {
   if (!paperId || !reviewerId)
     return res.status(400).json({ error: 'Both paperId and reviewerId are required!' });
 
-  db.query('INSERT INTO paper_reviewers (paper_id, reviewer_id, assigned_on ) VALUES (?, ?)',
+  db.query('INSERT INTO paper_reviewers (paper_id, reviewer_id, assigned_on ) VALUES (?, ?, NOW())',
     [paperId, reviewerId], (err) => {
+      console.log(err);
       if (err) return res.status(500).json({ error: 'Failed to assign reviewer!' });
       res.json({ message: 'Reviewer assigned successfully!' });
     });

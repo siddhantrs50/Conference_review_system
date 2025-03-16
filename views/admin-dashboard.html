@@ -297,7 +297,7 @@
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminToken}`
         },
-        body: JSON.stringify({ paperId, reviewerId })
+        body: JSON.stringify({ paperId, reviewerId})
       });
 
       if (res.ok) {
