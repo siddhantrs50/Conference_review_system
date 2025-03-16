@@ -7,6 +7,31 @@ const bcrypt = require('bcryptjs');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+
+const transporter = nodemailer.createTransport({
+  service: 'Gmail', 
+  auth: {
+    user: 'siddhantrs50@gmail.com',
+    pass: 'oeip enhh qict evok' 
+  }
+});
+
+async function sendResetEmail(email, link) {
+  await transporter.sendMail({
+    from: 'Conference Review System <youremail@gmail.com>',
+    to: email,
+    subject: 'Password Reset Link',
+    html: `
+      <h3>Password Reset</h3>
+      <p>Click the link below to reset your password:</p>
+      <a href="${link}">${link}</a>
+      <p>This link is valid for 1 hour.</p>
+    `
+  });
+}
+
 
 const app = express();
 const PORT = 3000;
@@ -613,7 +638,101 @@ app.put('/update-paper/:paperId', verifyToken, upload.single('paper'), (req, res
   });
 });
 
+/*===================================================
+  FORGOT-RESET PASSWORD
+  ===================================================*/
 
+  app.post('/forgot-password-:role', async (req, res) => {
+    const role = req.params.role;
+    const { email } = req.body;
+  
+    if (!['user', 'reviewer', 'admin'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role!' });
+    }
+  
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required!' });
+    }
+  
+    const table = role === 'user' ? 'users' : role === 'reviewer' ? 'reviewers' : 'admins';
+  
+    db.query(`SELECT * FROM ${table} WHERE email = ?`, [email], async (err, results) => {
+      if (err || results.length === 0) {
+        return res.status(404).json({ error: 'Email not found!' });
+      }
+  
+      const token = crypto.randomBytes(32).toString('hex');
+      const expires_at = new Date(Date.now() + 60 * 60 * 1000); // 1 hour validity
+  
+      // Remove existing reset requests for this user
+      db.query('DELETE FROM password_resets WHERE email = ? AND role = ?', [email, role], (delErr) => {
+        if (delErr) {
+          console.error(delErr);
+        }
+  
+        // Insert new reset token
+        db.query('INSERT INTO password_resets (email, role, token, expires_at) VALUES (?, ?, ?, ?)',
+          [email, role, token, expires_at], async (insertErr) => {
+            if (insertErr) {
+              console.error(insertErr);
+              return res.status(500).json({ error: 'Failed to generate reset link!' });
+            }
+  
+            const resetLink = `http://localhost:3000/reset-password.html?token=${token}&role=${role}&email=${encodeURIComponent(email)}`;
+  
+            try {
+              await sendResetEmail(email, resetLink);
+              res.json({ message: 'Reset link sent to your email!' });
+            } catch (mailErr) {
+              console.error(mailErr);
+              res.status(500).json({ error: 'Failed to send reset email!' });
+            }
+          });
+      });
+    });
+  });
+
+  app.post('/reset-password', async (req, res) => {
+    const { role, email, newPassword, token } = req.body;
+  
+    if (!role || !email || !newPassword || !token) {
+      return res.status(400).json({ error: 'All fields are required!' });
+    }
+  
+    // Find token
+    db.query('SELECT * FROM password_resets WHERE email = ? AND role = ? AND token = ?', [email, role, token], async (err, results) => {
+      if (err || results.length === 0) {
+        return res.status(400).json({ error: 'Invalid or expired token!' });
+      }
+  
+      const reset = results[0];
+      const now = new Date();
+      const expiresAt = new Date(reset.expires_at);
+  
+      if (now > expiresAt) {
+        // Delete expired token
+        db.query('DELETE FROM password_resets WHERE id = ?', [reset.id]);
+        return res.status(400).json({ error: 'Reset token has expired!' });
+      }
+  
+      // Hash the new password
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      const table = role === 'user' ? 'users' : role === 'reviewer' ? 'reviewers' : 'admins';
+  
+      // Update password
+      db.query(`UPDATE ${table} SET password = ? WHERE email = ?`, [hashedPassword, email], (updateErr) => {
+        if (updateErr) {
+          console.error(updateErr);
+          return res.status(500).json({ error: 'Failed to update password!' });
+        }
+  
+        // Delete token after successful reset
+        db.query('DELETE FROM password_resets WHERE id = ?', [reset.id]);
+        res.json({ message: 'Password reset successfully!' });
+      });
+    });
+  });
+  
 
 /* ==================================================
    MIDDLEWARE
